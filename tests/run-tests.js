@@ -246,6 +246,38 @@ test('normalize fills new defaults into old documents', function () {
   ok(n.base.profile.currentAge === 50 && n.base.assumptions.inflation > 0);
 });
 
+console.log('Review fixes (regressions)');
+test('OAS stays inflation-indexed when tax brackets are not', function () {
+  var p2 = RP.util.clone(plan); p2.tax.indexBrackets = false; p2.profile.currentAge = 64; p2.profile.retirementAge = 64;
+  var r = RP.engine.project(p2);
+  var a = rowAt(r, 65), b = rowAt(r, 74);
+  near(b.oas / a.oas, Math.pow(1 + p2.assumptions.inflation, 9), 0.001);
+});
+test('CPP/OAS start ages are clamped to their legal ranges', function () {
+  var p2 = RP.util.clone(plan); p2.benefits.cppStartAge = 55; p2.benefits.oasStartAge = 75;
+  var r = RP.engine.project(p2);
+  near(rowAt(r, 59).cpp, 0, 0.01);
+  near(rowAt(r, 60).cpp / rowAt(r, 60).cpi, p2.benefits.cppAt65 * (1 - 60 * 0.006), 1);
+  ok(rowAt(r, 70).oas > 0 && rowAt(r, 69).oas === 0);
+});
+test('EI premiums continue after 70; CPP contributions stop', function () {
+  var p70 = RP.tax.payroll(60000, ctx('ON', 71));
+  near(p70.cpp + p70.cpp2, 0, 0.01);
+  near(p70.ei, 60000 * 0.0163, 0.5);
+});
+test('files without accounts/items do not inherit sample balances', function () {
+  var n = RP.schema.normalize({ app: 'canadian-retirement-planner', schemaVersion: 2, base: { profile: { currentAge: 40 }, spending: { mode: 'itemized' } } });
+  ok(n.base.accounts.length === 0, 'accounts ' + n.base.accounts.length);
+  ok(n.base.spending.items.length === 0, 'items ' + n.base.spending.items.length);
+  ok(RP.schema.validate(n).some(function (x) { return x.path === 'base.accounts'; }));
+});
+test('events from files get the same optional defaults as events made in the app', function () {
+  var n = RP.schema.normalize({ base: { events: [{ id: 'e1', type: 'lumpSum', amount: 50000, startAge: 50 },
+    { id: 'e2', type: 'contribution', accountId: 'tfsa', mode: 'none', startAge: 40, endAge: 45 }] } });
+  ok(n.base.events[0].taxType === 'nontaxable' && n.base.events[0].indexed === true);
+  ok(!RP.schema.validate(n).some(function (x) { return /events\.1\.amount/.test(x.path); }), 'contribution "none" should not need an amount');
+});
+
 console.log('Example plans');
 test('every example plan loads and projects', function () {
   ok(RP.examples.length >= 6);

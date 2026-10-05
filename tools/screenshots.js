@@ -1,5 +1,5 @@
 /*
- * Regenerates the README screenshots (light + dark) from a demo plan.
+ * Regenerates the README screenshots from a demo plan (light theme).
  *
  *   npm install --no-save playwright && npx playwright install chromium
  *   node tools/screenshots.js
@@ -13,7 +13,7 @@ const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, 'docs', 'screenshots') + path.sep;
 (async () => {
   const browser = await chromium.launch();
-  for (const scheme of ['light', 'dark']) {
+  for (const scheme of ['light']) {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, colorScheme: scheme, deviceScaleFactor: 1 });
     if (process.env.CHARTJS_PATH) await page.route('**/chart.umd.min.js', r => r.fulfill({ path: process.env.CHARTJS_PATH, contentType: 'application/javascript' }));
     const errors = []; page.on('pageerror', e => errors.push(e.message));
@@ -64,7 +64,7 @@ const OUT = path.join(ROOT, 'docs', 'screenshots') + path.sep;
     await page.close();
   }
   // Phone screenshots (iPhone-sized, 2x to keep files small)
-  for (const scheme of ['light', 'dark']) {
+  for (const scheme of ['light']) {
     const ctx = await browser.newContext({ ...devices['iPhone 13'], deviceScaleFactor: 2, colorScheme: scheme });
     const page = await ctx.newPage();
     if (process.env.CHARTJS_PATH) await page.route('**/chart.umd.min.js', r => r.fulfill({ path: process.env.CHARTJS_PATH, contentType: 'application/javascript' }));

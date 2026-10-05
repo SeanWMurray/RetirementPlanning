@@ -67,7 +67,8 @@
       var metrics = [
         { label: 'Retirement age', get: function (r) { return r.result.plan.profile.retirementAge; }, f: String },
         { label: 'Portfolio at retirement', get: function (r) { return real ? r.result.summary.atRetirementReal : r.result.summary.atRetirement; }, f: fmt.compact, better: 1 },
-        { label: 'Peak portfolio', get: function (r) { var s = r.result.summary; var y = r.result.years.filter(function (x) { return x.age === s.peakAge; })[0]; return real && y ? s.peak / y.cpiEnd : s.peak; }, f: fmt.compact, better: 1 },
+        { label: 'Peak portfolio', get: function (r) {
+          return r.result.years.reduce(function (m, y) { return Math.max(m, real ? y.total / y.cpiEnd : y.total); }, 0); }, f: fmt.compact, better: 1 },
         { label: 'Ending portfolio', get: function (r) { return real ? r.result.summary.endingReal : r.result.summary.ending; }, f: fmt.compact, better: 1 },
         { label: 'Money lasts to', get: function (r) { var s = r.result.summary; return s.firstShortfallAge == null ? s.endAge + 1 : s.firstShortfallAge; },
           f: function (v, r) { var s = r.result.summary; return s.firstShortfallAge == null ? s.endAge + '+ ✓' : 'age ' + v; }, better: 1 },

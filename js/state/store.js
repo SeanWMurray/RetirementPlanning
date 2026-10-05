@@ -46,15 +46,24 @@
 
   store.saveUi = function () { safeSet(UI_KEY, JSON.stringify(store.ui)); };
 
+  function saveNow() {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    store.doc.meta.modified = new Date().toISOString();
+    var ok = safeSet(STORAGE_KEY, JSON.stringify(store.doc));
+    store.lastSaved = ok ? new Date() : null;
+    store.saveFailed = !ok;
+    emit('saved');
+  }
   function scheduleSave() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(function () {
-      store.doc.meta.modified = new Date().toISOString();
-      var ok = safeSet(STORAGE_KEY, JSON.stringify(store.doc));
-      store.lastSaved = ok ? new Date() : null;
-      store.saveFailed = !ok;
-      emit('saved');
-    }, 400);
+    saveTimer = setTimeout(saveNow, 400);
+  }
+  // Don't lose an edit made just before the tab is closed or backgrounded (phones).
+  if (typeof window !== 'undefined') {
+    var flush = function () { if (saveTimer && store.doc) saveNow(); };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flush(); });
   }
 
   /** Recalculate base + all scenarios. Debounced unless `now`. */

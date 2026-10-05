@@ -148,9 +148,12 @@
       // 2. Income
       y.employment = retired ? 0 : salary0 * Math.pow(1 + growth, t) * y.mods.income;
       var B = plan.benefits;
-      y.cpp = B.cppEnabled && age >= num(B.cppStartAge) ? num(B.cppAt65) * cpi * cppFactor(num(B.cppStartAge), d) : 0;
-      y.oas = B.oasEnabled && age >= num(B.oasStartAge)
-        ? d.oas.maxAnnual65 * taxIdx * num(B.oasResidency, 1) * oasFactor(num(B.oasStartAge), d) * (age >= 75 ? 1 + d.oas.age75Boost : 1)
+      var cppStart = RP.util.clamp(Math.round(num(B.cppStartAge, 65)), 60, 70);
+      var oasStart = RP.util.clamp(Math.round(num(B.oasStartAge, 65)), 65, 70);
+      var oasIdx = Math.pow(1 + inf, year - d.year);   // OAS is CPI-indexed whether or not tax brackets are
+      y.cpp = B.cppEnabled && age >= cppStart ? num(B.cppAt65) * cpi * cppFactor(cppStart, d) : 0;
+      y.oas = B.oasEnabled && age >= oasStart
+        ? d.oas.maxAnnual65 * oasIdx * RP.util.clamp(num(B.oasResidency, 1), 0, 1) * oasFactor(oasStart, d) * (age >= 75 ? 1 + d.oas.age75Boost : 1)
         : 0;
       var exOther = 0, exPension = 0, exNonTax = 0;
       y.extraIncome.forEach(function (x) {
@@ -344,8 +347,11 @@
         if (leftover < -0.5) {
           // Deficit: draw from savings (C is 0 here).
           var sol = solveWithdrawal(-leftover, taxRes.totalWithPayroll);
-          wd = sol.dr; shortfall = sol.shortfall;
+          wd = sol.dr;
           taxRes = taxWith({ rrspDeduction: contrib.rrsp, rrif: wd.rrif, capitalGains: wd.capitalGains });
+          // Reconcile against the final tax so cash always balances (covers any solver tolerance).
+          var after = cashIn + wd.total - taxRes.totalWithPayroll - y.spending - C;
+          if (after < -0.5) shortfall = -after; else unallocated = Math.max(0, after);
         } else {
           unallocated = Math.max(0, leftover);
         }
@@ -368,8 +374,8 @@
           contrib = allocate(cashNet, false);   // reinvest surplus outside the RRSP
           C = contrib.total;
           unallocated = cashNet - C;
-        } else if (cashNet < -0.5 && target != null) {
-          shortfall = -cashNet;
+        } else if (cashNet < -0.5) {
+          shortfall = -cashNet;   // spending not covered (fixed-rate strategies, depleted accounts, or solver tolerance)
         }
       }
 

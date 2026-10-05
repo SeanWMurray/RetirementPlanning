@@ -47,9 +47,9 @@
       body.insertBefore(h('div.callout',
         ui.icon('info'), h('span', 'This event belongs to the base plan, so edits apply to every scenario. To change it only in "' + sc.name + '", switch it off here and add a scenario-specific copy.'),
         ui.button(RP.store.allEvents().some(function (x) { return x.ev.id === id && !x.enabled; }) ? 'Include in this scenario' : 'Exclude from this scenario',
-          function () { RP.store.toggleEventInScenario(id); document.querySelector('.modal-backdrop').remove(); }, { cls: 'small' })), body.firstChild);
+          function () { RP.store.toggleEventInScenario(id); if (dlg) dlg.close(); }, { cls: 'small' })), body.firstChild);
     }
-    ui.modal('Edit ' + (def ? def.label.toLowerCase() : 'event'), body, actions);
+    var dlg = ui.modal('Edit ' + (def ? def.label.toLowerCase() : 'event'), body, actions);
   };
 
   /** Context menu offering every event type + presets at an age. */

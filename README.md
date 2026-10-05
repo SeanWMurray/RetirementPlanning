@@ -2,22 +2,20 @@
 
 A private, browser-only retirement planning tool for Canadians. No server, no account, no build step. Open `index.html` and plan.
 
-![Projection view, light theme](docs/screenshots/light-projection.png)
-
-![Projection view, dark theme](docs/screenshots/dark-projection.png)
+![Projection view](docs/screenshots/light-projection.png)
 
 ## Screenshots
 
-Every view comes in a light and a dark theme. The app follows your system setting by default; you can switch under **View › Theme**.
+The app follows your system's light/dark setting; you can also switch themes under **View › Theme**.
 
-| | Light | Dark |
-|---|---|---|
-| **Year-by-year table**: click any row to add an event at that age | [![](docs/screenshots/light-table-menu.png)](docs/screenshots/light-table-menu.png) | [![](docs/screenshots/dark-table-menu.png)](docs/screenshots/dark-table-menu.png) |
-| **Scenarios**: overlay and compare against the base plan | [![](docs/screenshots/light-scenarios.png)](docs/screenshots/light-scenarios.png) | [![](docs/screenshots/dark-scenarios.png)](docs/screenshots/dark-scenarios.png) |
-| **Sensitivity**: solvers, tornado chart, two-way grid | [![](docs/screenshots/light-sensitivity.png)](docs/screenshots/light-sensitivity.png) | [![](docs/screenshots/dark-sensitivity.png)](docs/screenshots/dark-sensitivity.png) |
-| **Monte Carlo**: probability of success and percentile bands | [![](docs/screenshots/light-montecarlo.png)](docs/screenshots/light-montecarlo.png) | [![](docs/screenshots/dark-montecarlo.png)](docs/screenshots/dark-montecarlo.png) |
-| **Tax**: full return-style breakdown for any year | [![](docs/screenshots/light-tax.png)](docs/screenshots/light-tax.png) | [![](docs/screenshots/dark-tax.png)](docs/screenshots/dark-tax.png) |
-| **Events**: timeline of life events across the plan | [![](docs/screenshots/light-events.png)](docs/screenshots/light-events.png) | [![](docs/screenshots/dark-events.png)](docs/screenshots/dark-events.png) |
+| View | |
+|---|---|
+| **Year-by-year table**: click any row to add an event at that age | [![](docs/screenshots/light-table-menu.png)](docs/screenshots/light-table-menu.png) |
+| **Scenarios**: overlay and compare against the base plan | [![](docs/screenshots/light-scenarios.png)](docs/screenshots/light-scenarios.png) |
+| **Sensitivity**: solvers, tornado chart, two-way grid | [![](docs/screenshots/light-sensitivity.png)](docs/screenshots/light-sensitivity.png) |
+| **Monte Carlo**: probability of success and percentile bands | [![](docs/screenshots/light-montecarlo.png)](docs/screenshots/light-montecarlo.png) |
+| **Tax**: full return-style breakdown for any year | [![](docs/screenshots/light-tax.png)](docs/screenshots/light-tax.png) |
+| **Events**: timeline of life events across the plan | [![](docs/screenshots/light-events.png)](docs/screenshots/light-events.png) |
 
 ## Features
 
@@ -46,9 +44,9 @@ Every view comes in a light and a dark theme. The app follows your system settin
 
 On a phone the app switches to a mobile layout: results first, a bottom bar to switch between **Inputs** and **Results**, a live summary while you edit, bottom-sheet menus, full-screen dialogs and touch-sized controls.
 
-| Results | Inputs | Results (dark) | Inputs (dark) |
-|---|---|---|---|
-| <img src="docs/screenshots/mobile-light-results.png" width="190" alt="Phone: results"> | <img src="docs/screenshots/mobile-light-inputs.png" width="190" alt="Phone: inputs"> | <img src="docs/screenshots/mobile-dark-results.png" width="190" alt="Phone: results, dark"> | <img src="docs/screenshots/mobile-dark-inputs.png" width="190" alt="Phone: inputs, dark"> |
+| Results | Inputs |
+|---|---|
+| <img src="docs/screenshots/mobile-light-results.png" width="240" alt="Phone: results"> | <img src="docs/screenshots/mobile-light-inputs.png" width="240" alt="Phone: inputs"> |
 
 ## Example plans
 

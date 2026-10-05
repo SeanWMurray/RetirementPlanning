@@ -74,14 +74,16 @@
     var d = ctx.data.payroll, idx = ctx.index, s = ctx.settings || {};
     var prov = ctx.data.provinces[ctx.province] || {};
     var out = { cpp: 0, cpp2: 0, ei: 0, qpip: 0, baseCredit: 0, deduction: 0, total: 0 };
-    if (!s.includePayroll || employment <= 0 || ctx.age >= d.stopAge) return out;
+    if (!s.includePayroll || employment <= 0) return out;
 
+    // CPP/QPP contributions stop at 70; EI and QPIP premiums apply at any age.
+    var cppApplies = ctx.age < d.stopAge;
     var p = prov.usesQPP ? d.qpp : d.cpp;
     var ympe = p.ympe * idx, yampe = p.yampe * idx;
-    var pensionable = Math.max(0, Math.min(employment, ympe) - p.exemption);
+    var pensionable = cppApplies ? Math.max(0, Math.min(employment, ympe) - p.exemption) : 0;
     var base = pensionable * p.baseRate;
     var enh = pensionable * p.firstEnhancedRate;
-    var tier2 = Math.max(0, Math.min(employment, yampe) - ympe) * p.cpp2Rate;
+    var tier2 = cppApplies ? Math.max(0, Math.min(employment, yampe) - ympe) * p.cpp2Rate : 0;
 
     if (s.selfEmployed) {
       // Pays both halves. Employee base portion -> credit; employer half + enhanced portions -> deduction.

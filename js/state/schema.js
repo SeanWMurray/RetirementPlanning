@@ -115,6 +115,21 @@
     { value: 'none', label: "Don't contribute" }
   ];
 
+  /**
+   * Fill optional event fields the same way the app does when it creates an event, so a
+   * hand-written or AI-written event behaves like one made in the UI (e.g. a lump sum without
+   * taxType is non-taxable). Only presentation/treatment fields are filled; amounts, ages and
+   * modes must be explicit (the validator reports them).
+   */
+  var SAFE_EVENT_DEFAULTS = ['indexed', 'everyYears', 'taxType'];
+  function fillEventDefaults(e) {
+    if (e.enabled == null) e.enabled = true;
+    var def = RP.eventTypes && RP.eventTypes.get(e.type);
+    if (!def) return;
+    var dflt = def.defaults(U.num(e.startAge, 0), null);
+    SAFE_EVENT_DEFAULTS.forEach(function (k) { if (e[k] == null && dflt[k] !== undefined) e[k] = dflt[k]; });
+  }
+
   /** Bring any loaded document up to the current schema and fill defaults. */
   schema.normalize = function (raw) {
     if (!raw || typeof raw !== 'object') throw new Error('Not a plan file.');
@@ -128,7 +143,14 @@
 
     var fresh = schema.newDocument();
     doc.meta = U.merge(fresh.meta, doc.meta || {});
-    doc.base = U.merge(schema.defaultBase(), doc.base || {});
+    // Lists that carry money must never be filled with the sample defaults: a file that omits
+    // them gets empty lists (the validator then warns), not the default plan's balances.
+    var rawBase = doc.base || {};
+    var hadAccounts = Array.isArray(rawBase.accounts);
+    var hadItems = rawBase.spending && Array.isArray(rawBase.spending.items);
+    doc.base = U.merge(schema.defaultBase(), rawBase);
+    if (!hadAccounts && raw.base) doc.base.accounts = [];
+    if (!hadItems && raw.base && raw.base.spending) doc.base.spending.items = [];
     doc.settings = U.merge(fresh.settings, doc.settings || {});
     doc.scenarios = (doc.scenarios || []).map(function (s) {
       return Object.assign({ id: U.uid('sc'), name: 'Scenario', color: schema.SCENARIO_COLORS[0], visible: true, notes: '', overrides: {}, events: [], disabledEvents: [] }, s);
@@ -143,8 +165,8 @@
       var arr = U.getPath(doc.base, k);
       if (Array.isArray(arr)) U.setPath(doc.base, k, arr.filter(function (id) { return acctIds.indexOf(id) >= 0; }));
     });
-    (doc.base.events || []).forEach(function (e) { if (e.enabled == null) e.enabled = true; });
-    doc.scenarios.forEach(function (s) { (s.events || []).forEach(function (e) { if (!e.id) e.id = U.uid('ev'); if (e.enabled == null) e.enabled = true; }); });
+    (doc.base.events || []).forEach(fillEventDefaults);
+    doc.scenarios.forEach(function (s) { (s.events || []).forEach(function (e) { if (!e.id) e.id = U.uid('ev'); fillEventDefaults(e); }); });
     return doc;
   };
 
@@ -269,7 +291,9 @@
         def.fields.forEach(function (f) {
           var v = e[f.key];
           if (f.key === 'label') return;
-          if (v == null || v === '') { if (f.key !== 'endAge' && f.key !== 'everyYears' && f.key !== 'indexed') err(ep + '.' + f.key, 'is required for ' + e.type + ' events'); return; }
+          var optional = f.key === 'endAge' || f.key === 'everyYears' || f.key === 'indexed' ||
+            (e.type === 'contribution' && f.key === 'amount' && e.mode !== 'custom');
+          if (v == null || v === '') { if (!optional) err(ep + '.' + f.key, 'is required for ' + e.type + ' events'); return; }
           if (f.type === 'select' && !(typeof f.options === 'function')) oneOf(ep + '.' + f.key, v, f.options.map(function (o) { return o.value; }));
           if ((f.type === 'money' || f.type === 'age' || f.type === 'number' || f.type === 'percent') && !isNum(v)) err(ep + '.' + f.key, 'must be a number');
           if (f.type === 'percent' && isNum(v) && Math.abs(v) > 1.5 && Math.abs(v) <= 100) err(ep + '.' + f.key, 'looks like a percentage; use a decimal, e.g. -0.2 for −20%');
