@@ -174,24 +174,47 @@
     id: 'savings', title: 'Savings',
     summary: function (p) {
       var m = RP.savingsModes.get(p.savings.mode);
-      if (p.savings.mode === 'percentGross') return fmt.pct(p.savings.rate) + ' of salary';
-      if (p.savings.mode === 'fixed') return fmt.money(p.savings.amount) + '/yr';
+      var s = p.savings;
+      if (s.mode === 'percentGross') return fmt.pct(s.rate) + ' of salary' + (num(s.rateStep) ? ' · ' + (s.rateStep > 0 ? '+' : '') + fmt.pct(s.rateStep, 1) + ' pts/yr' + (s.rateStep > 0 && s.rateMax != null ? ' to ' + fmt.pct(s.rateMax, 0) : '') : '');
+      if (s.mode === 'fixed') return fmt.money(s.amount) + '/yr · ' + (s.amountGrowth == null || s.amountGrowth === '' ? 'grows with inflation' : '+' + fmt.pct(s.amountGrowth) + '/yr');
       return m ? m.label : '';
     },
     render: function (p) {
       var mode = RP.savingsModes.get(p.savings.mode) || RP.savingsModes.list()[0];
-      var defs = { 'savings.rate': { path: 'savings.rate', label: 'Savings rate (% of gross)', type: 'percent' },
-                   'savings.amount': { path: 'savings.amount', label: "Annual savings (today's $)", type: 'money' } };
+      var defs = {
+        'savings.rate': { path: 'savings.rate', label: 'Savings rate (% of gross)', type: 'percent', min: 0, max: 1 },
+        'savings.rateStep': { path: 'savings.rateStep', label: 'Increase rate by (points/yr)', type: 'percent',
+          help: 'Raise the savings rate this much each year, e.g. 0.5 = 10% → 10.5% → 11%… Use 0 to keep it constant, or a negative number to save less over time.' },
+        'savings.rateMax': { path: 'savings.rateMax', label: 'Maximum rate', type: 'percent', min: 0, max: 1, help: 'The rate stops increasing at this level.' },
+        'savings.amount': { path: 'savings.amount', label: 'Annual savings (first year)', type: 'money', min: 0 },
+        'savings.amountGrowth': { path: 'savings.amountGrowth', label: 'Annual increase', type: 'percent', nullable: true, placeholder: 'inflation',
+          help: 'How much the amount grows each year, e.g. 5% = $10,000 → $10,500 → $11,025… Leave blank to grow with inflation (constant in today’s dollars).' }
+      };
+      var preview = savingsPreview(p);
       return h('div',
         ui.fields([{ path: 'savings.mode', label: 'How much do you save?', type: 'select', wide: true,
           options: RP.savingsModes.list().map(function (m) { return { value: m.id, label: m.label }; }) }]),
         note(mode.description),
         ui.fields(mode.fields.map(function (f) { return defs[f]; })),
+        h('p.note.savings-preview', preview || ''),
         orderList('savings.order', 'Contribution order', 'Savings fill accounts top to bottom, each up to its contribution limit (set per account under Accounts & balances). Savings no account can take are shown as “Unsaved surplus”.'),
         ui.fields([{ path: 'savings.enforceRoom', label: 'Enforce RRSP / TFSA contribution room', type: 'toggle', wide: true }]),
         note('To change an account’s contributions for certain ages (e.g. max the TFSA from 40–50), add a “Contribution change” event (Insert menu).'));
     }
   });
+
+  /** "Year 1 → year 5 → year 10" preview of the savings target, in future dollars. */
+  function savingsPreview(p) {
+    var s = p.savings, M = RP.savingsModes, inf = num(p.assumptions.inflation);
+    var years = Math.max(0, num(p.profile.retirementAge) - num(p.profile.currentAge));
+    if (!years || (s.mode !== 'fixed' && s.mode !== 'percentGross')) return null;
+    var marks = [0, 4, 9, 19].filter(function (t) { return t < years; });
+    var parts = marks.map(function (t) {
+      var v = s.mode === 'fixed' ? fmt.money(M.amountFor(s, t, Math.pow(1 + inf, t))) : fmt.pct(M.rateFor(s, t), 1);
+      return 'year ' + (t + 1) + ': ' + v;
+    });
+    return 'Target ' + parts.join(' → ') + (s.mode === 'fixed' ? ' (future dollars).' : ' of salary.');
+  }
 
   // ---------------------------------------------------------------------------
   sections.register({
@@ -359,6 +382,8 @@
 
   ui.refreshSummaries = function (host) {
     var plan = store().effective();
+    var pv = host.querySelector('.savings-preview');
+    if (pv) pv.textContent = savingsPreview(plan) || '';
     host.querySelectorAll('details.section').forEach(function (det, i) {
       var sec = sections.list()[i];
       var el = det.querySelector('.section-summary');

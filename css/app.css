@@ -216,6 +216,7 @@ input.color { width: 22px; height: 22px; padding: 1px; border: 1px solid var(--b
 .overridden > .field-label .override-reset { display: inline-flex; }
 .overridden .input, .overridden .segmented button.active { background: var(--modified); }
 .note { color: var(--muted); padding: 3px 8px 3px 22px; line-height: 1.4; font-size: 11.5px; }
+.savings-preview:empty { display: none; }
 .card .note, .modal .note { padding-left: 0; padding-right: 0; }
 
 /* list editors inside the property grid */

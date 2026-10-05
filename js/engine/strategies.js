@@ -21,20 +21,37 @@
     target: function () { return null; }
   });
 
+  /** Savings rate for year t: starting rate, stepped up (or down) each year, capped at rateMax. */
+  RP.savingsModes.rateFor = function (savings, t) {
+    var rate = num(savings.rate), step = num(savings.rateStep, 0);
+    if (step > 0) {
+      var cap = savings.rateMax == null || savings.rateMax === '' ? 1 : num(savings.rateMax);
+      return Math.min(rate + step * t, Math.max(rate, cap));
+    }
+    return Math.max(0, rate + step * t);
+  };
+
+  /** Fixed savings amount for year t: grows at amountGrowth, or with inflation when that is blank. */
+  RP.savingsModes.amountFor = function (savings, t, cpi) {
+    var g = savings.amountGrowth;
+    var factor = g == null || g === '' ? cpi : Math.pow(1 + num(g), t);
+    return num(savings.amount) * factor;
+  };
+
   RP.savingsModes.register({
     id: 'percentGross',
     label: '% of gross employment income',
-    description: 'Contribute a fixed % of salary. Anything left over after spending is treated as spent (not invested); a deficit is drawn from savings.',
-    fields: ['savings.rate'],
-    target: function (y, plan) { return num(plan.savings.rate) * y.employment * y.mods.savings; }
+    description: 'Contribute a % of salary (so savings rise with your raises). Optionally raise the rate each year up to a maximum. Leftover cash is treated as spent; a deficit is drawn from savings.',
+    fields: ['savings.rate', 'savings.rateStep', 'savings.rateMax'],
+    target: function (y, plan) { return RP.savingsModes.rateFor(plan.savings, y.t) * y.employment * y.mods.savings; }
   });
 
   RP.savingsModes.register({
     id: 'fixed',
-    label: "Fixed amount (today's $)",
-    description: 'Contribute a fixed inflation-indexed amount each working year. Leftover cash is treated as spent; a deficit is drawn from savings.',
-    fields: ['savings.amount'],
-    target: function (y, plan) { return num(plan.savings.amount) * y.cpi * y.mods.savings; }
+    label: 'Fixed amount, increasing yearly',
+    description: 'Contribute a set amount in the first year, increasing each year by the annual increase (or with inflation if left blank). Leftover cash is treated as spent; a deficit is drawn from savings.',
+    fields: ['savings.amount', 'savings.amountGrowth'],
+    target: function (y, plan) { return RP.savingsModes.amountFor(plan.savings, y.t, y.cpi) * y.mods.savings; }
   });
 
   RP.withdrawalStrategies = RP.createRegistry('withdrawalStrategies');

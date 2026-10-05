@@ -246,6 +246,35 @@ test('normalize fills new defaults into old documents', function () {
   ok(n.base.profile.currentAge === 50 && n.base.assumptions.inflation > 0);
 });
 
+console.log('Savings growth');
+test('fixed savings grow by the annual increase (or inflation when blank)', function () {
+  var p2 = RP.util.clone(plan); p2.savings.mode = 'fixed'; p2.savings.amount = 10000; p2.savings.amountGrowth = 0.05;
+  p2.accounts.forEach(function (a) { a.contribLimit = 'unlimited'; }); p2.savings.enforceRoom = false;
+  var r = RP.engine.project(p2);
+  near(rowAt(r, 35).contributions, 10000, 1);
+  near(rowAt(r, 36).contributions, 10500, 1);
+  near(rowAt(r, 45).contributions, 10000 * Math.pow(1.05, 10), 1);
+  p2.savings.amountGrowth = null;
+  near(rowAt(RP.engine.project(p2), 45).contributions, 10000 * rowAt(r, 45).cpi, 1);
+});
+test('savings rate steps up each year and stops at the maximum', function () {
+  var s = { rate: 0.10, rateStep: 0.005, rateMax: 0.15 };
+  near(RP.savingsModes.rateFor(s, 0), 0.10, 1e-9);
+  near(RP.savingsModes.rateFor(s, 4), 0.12, 1e-9);
+  near(RP.savingsModes.rateFor(s, 30), 0.15, 1e-9);
+  near(RP.savingsModes.rateFor({ rate: 0.2, rateStep: 0.01, rateMax: 0.15 }, 5), 0.2, 1e-9, 'start above max stays put');
+  near(RP.savingsModes.rateFor({ rate: 0.1, rateStep: -0.01 }, 20), 0, 1e-9, 'never negative');
+  var p2 = RP.util.clone(plan); p2.savings = Object.assign(p2.savings, { mode: 'percentGross', rate: 0.1, rateStep: 0.01, rateMax: 0.2, enforceRoom: false });
+  p2.accounts.forEach(function (a) { a.contribLimit = 'unlimited'; });
+  var r = RP.engine.project(p2), y = rowAt(r, 40);
+  near(y.contributions, 0.15 * y.employment, 1);
+});
+test('validator catches a savings increase written as a percentage', function () {
+  var n = RP.schema.normalize({ base: { savings: { amountGrowth: 5, rateStep: 0.5 } } });
+  var msgs = RP.schema.validate(n).map(function (x) { return x.path; }).join(' ');
+  ok(/savings\.amountGrowth/.test(msgs) && /savings\.rateStep/.test(msgs), msgs);
+});
+
 console.log('Review fixes (regressions)');
 test('OAS stays inflation-indexed when tax brackets are not', function () {
   var p2 = RP.util.clone(plan); p2.tax.indexBrackets = false; p2.profile.currentAge = 64; p2.profile.retirementAge = 64;

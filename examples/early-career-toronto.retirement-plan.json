@@ -107,7 +107,10 @@
     "savings": {
       "mode": "surplus",
       "rate": 0.15,
+      "rateStep": 0,
+      "rateMax": 0.3,
       "amount": 15000,
+      "amountGrowth": null,
       "enforceRoom": true,
       "order": [
         "tfsa",

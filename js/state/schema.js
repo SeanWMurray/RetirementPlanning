@@ -47,7 +47,7 @@
           { id: 'sp_travel', name: 'Travel', amount: 8000, phase: 'retired', indexed: true }
         ]
       },
-      savings: { mode: 'surplus', rate: 0.15, amount: 15000, enforceRoom: true, order: ['rrsp', 'tfsa', 'cash', 'nonreg'] },
+      savings: { mode: 'surplus', rate: 0.15, rateStep: 0, rateMax: 0.3, amount: 15000, amountGrowth: null, enforceRoom: true, order: ['rrsp', 'tfsa', 'cash', 'nonreg'] },
       accounts: [
         { id: 'rrsp', name: 'RRSP / RRIF', type: 'rrsp', balance: 60000, contribLimit: 'legal', contributionCap: 18000, startingRoom: null, returnRate: null },
         { id: 'tfsa', name: 'TFSA', type: 'tfsa', balance: 40000, contribLimit: 'legal', contributionCap: 7000, startingRoom: null, returnRate: null },
@@ -201,7 +201,7 @@
   var RATES = [
     ['income.growth', -0.2, 0.3], ['assumptions.inflation', -0.05, 0.2], ['assumptions.returnPre', -0.5, 0.3],
     ['assumptions.returnPost', -0.5, 0.3], ['assumptions.cashReturn', -0.1, 0.2], ['assumptions.volatility', 0, 0.6],
-    ['spending.retirementChange', -1, 2], ['savings.rate', 0, 1], ['retirement.withdrawalRate', 0, 0.5],
+    ['spending.retirementChange', -1, 2], ['savings.rate', 0, 1], ['savings.rateStep', -0.1, 0.1], ['savings.rateMax', 0, 1], ['savings.amountGrowth', -0.5, 0.5], ['retirement.withdrawalRate', 0, 0.5],
     ['tax.flatRate', 0, 0.9], ['benefits.oasResidency', 0, 1]
   ];
 

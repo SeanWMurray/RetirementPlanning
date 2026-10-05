@@ -167,9 +167,12 @@ Typical setup: RRSP `"legal"`, TFSA `"legal"`, non-registered `"unlimited"`, cas
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `mode` | enum | `"surplus"` | `"surplus"` = invest everything left after tax and spending. `"percentGross"` = contribute `rate` × salary; leftover cash is assumed spent. `"fixed"` = contribute `amount` (today's $) per year; leftover cash is assumed spent. |
-| `rate` | rate | 0.15 | For `percentGross`. |
-| `amount` | number | 15000 | For `fixed`. |
+| `mode` | enum | `"surplus"` | `"surplus"` = invest everything left after tax and spending. `"percentGross"` = contribute a % of salary; leftover cash is assumed spent. `"fixed"` = contribute a set amount that increases every year; leftover cash is assumed spent. |
+| `rate` | rate | 0.15 | For `percentGross`: savings rate in the first year. |
+| `rateStep` | rate | 0 | For `percentGross`: added to the rate each year, in percentage points as a decimal (`0.005` = +0.5 points/yr, so 10% → 10.5% → 11%). Negative values lower it (never below 0). |
+| `rateMax` | rate or null | 0.3 | For `percentGross`: the rate stops rising at this level. |
+| `amount` | number | 15000 | For `fixed`: amount saved in the first year. |
+| `amountGrowth` | rate or null | `null` | For `fixed`: annual increase of the amount, e.g. `0.05` = +5%/yr. `null` = grow with inflation (constant in today's dollars). |
 | `order` | array of account ids | | Order in which savings fill accounts, each up to its limit. |
 | `enforceRoom` | boolean | `true` | Cap RRSP/TFSA contributions at available room. |
 
@@ -329,7 +332,7 @@ The planner checks every file it opens. Errors are shown with the field path. Ma
 - `app` is `"canadian-retirement-planner"` and `schemaVersion` is `2`.
 - Ages are integers, `16 ≤ currentAge ≤ 110`, `endAge > currentAge`, `cppStartAge` is 60–70 and `oasStartAge` is 65–70.
 - `province` is a valid two-letter code and `tax.year` is `"2026"`.
-- Every rate is a decimal in a sensible range (inflation −0.05–0.2; returns −0.5–0.3; `savings.rate`, `oasResidency` and `flatRate` 0–1; `withdrawalRate` 0–0.5). A value like `5` for 5% is an error.
+- Every rate is a decimal in a sensible range (inflation −0.05–0.2; returns −0.5–0.3; `savings.rate`, `savings.rateMax`, `oasResidency` and `flatRate` 0–1; `savings.rateStep` −0.1–0.1; `savings.amountGrowth` −0.5–0.5; `withdrawalRate` 0–0.5). A value like `5` for 5% is an error.
 - Account ids are unique; `type` and `contribLimit` use the listed values; balances are ≥ 0; `contributionCap` is set when `contribLimit` is `"custom"`.
 - Every event has a valid `type` and all its required fields, `endAge ≥ startAge`, and ages within the plan. A `contribution` event's `accountId` must exist.
 - Scenario override paths exist in `base`, and the scenario's resulting plan also passes these checks. `disabledEvents` ids exist in `base.events`.
