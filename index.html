@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en-CA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Canadian Retirement Planner</title>
+  <meta name="description" content="A private, browser-only Canadian retirement planner: tax by province, CPP/OAS, RRSP/TFSA, scenarios, sensitivity analysis and Monte Carlo.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232a78d6'/%3E%3Cpath d='M7 23l6-7 5 4 7-10' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/app.css">
+  <!-- Chart.js from CDN. The app still calculates and shows tables if this fails to load. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
+</head>
+<body>
+  <div id="app"><div class="boot">Loading planner…</div></div>
+  <noscript>This planner runs entirely in your browser and needs JavaScript enabled.</noscript>
+
+  <!--
+    Plain scripts (no modules / no build) so this works from file:// and any static host.
+    Order: core → data → engine → state → ui → panels (tab order follows panel order) → app.
+  -->
+  <script src="js/core.js" defer></script>
+  <script src="js/data/tax-2026.js" defer></script>
+  <script src="js/engine/tax.js" defer></script>
+  <script src="js/engine/events.js" defer></script>
+  <script src="js/engine/strategies.js" defer></script>
+  <script src="js/engine/projection.js" defer></script>
+  <script src="js/engine/scenarios.js" defer></script>
+  <script src="js/engine/analysis.js" defer></script>
+  <script src="js/state/schema.js" defer></script>
+  <script src="js/state/store.js" defer></script>
+  <script src="js/ui/dom.js" defer></script>
+  <script src="js/ui/fields.js" defer></script>
+  <script src="js/ui/charts.js" defer></script>
+  <script src="js/ui/eventsui.js" defer></script>
+  <script src="js/ui/inputs.js" defer></script>
+  <script src="js/ui/panels/projection.js" defer></script>
+  <script src="js/ui/panels/scenarios.js" defer></script>
+  <script src="js/ui/panels/analysis.js" defer></script>
+  <script src="js/ui/panels/montecarlo.js" defer></script>
+  <script src="js/ui/panels/tax.js" defer></script>
+  <script src="js/ui/panels/events.js" defer></script>
+  <script src="js/ui/panels/about.js" defer></script>
+  <script src="js/ui/app.js" defer></script>
+</body>
+</html>
