@@ -278,6 +278,36 @@ test('events from files get the same optional defaults as events made in the app
   ok(!RP.schema.validate(n).some(function (x) { return /events\.1\.amount/.test(x.path); }), 'contribution "none" should not need an amount');
 });
 
+test('fuzz: 150 random plans keep cash balanced, balances ≥ 0 and room rules', function () {
+  var rand = RP.util.rng(2026), pick = function (a) { return a[Math.floor(rand() * a.length)]; };
+  function between(a, b) { return a + rand() * (b - a); }
+  var provs = Object.keys(d.provinces);
+  for (var n = 0; n < 150; n++) {
+    var p = RP.scenarios.effective(RP.schema.newDocument(), 'base');
+    var a0 = Math.round(between(25, 75));
+    Object.assign(p.profile, { currentAge: a0, retirementAge: Math.round(between(a0 - 5, 72)), endAge: Math.round(between(Math.max(a0 + 5, 85), 100)), province: pick(provs) });
+    p.income.salary = between(0, 350000); p.spending.total = between(20000, 180000); p.spending.retirementChange = between(-0.3, 0.2);
+    p.accounts.forEach(function (a) { a.balance = between(0, 800000); a.contribLimit = pick(['legal', 'custom', 'unlimited', 'none']); a.contributionCap = between(0, 30000); a.startingRoom = rand() < 0.5 ? null : between(0, 100000); });
+    p.savings.mode = pick(['surplus', 'percentGross', 'fixed']);
+    p.retirement.strategy = pick(['needs', 'fixedReal', 'percentBalance']);
+    p.tax.mode = pick(['calculated', 'calculated', 'flat', 'custom']); p.tax.selfEmployed = rand() < 0.2;
+    for (var k = 0; k < 3; k++) {
+      var t = pick(RP.eventTypes.ids()), e = RP.events.create(t, Math.round(between(a0, p.profile.endAge)), p);
+      if (e.amount != null) e.amount = between(1000, 300000);
+      if (t === 'contribution') e.accountId = pick(p.accounts).id;
+      p.events.push(e);
+    }
+    RP.engine.project(p).years.forEach(function (y) {
+      near(y.incomeTotal + y.withdrawals + y.shortfall, y.tax + y.spending + y.contributions + y.unallocated, 2, 'plan ' + n + ' age ' + y.age);
+      Object.keys(y.balances).forEach(function (id) { ok(y.balances[id] >= 0, 'negative balance'); });
+      p.accounts.forEach(function (a) {
+        if (a.type === 'rrsp' && y.age > 71) ok(!(y.contribByAccount[a.id] > 0.01), 'RRSP contribution after 71');
+        if (a.type === 'rrsp' || a.type === 'tfsa') ok(!(y.roomByAccount[a.id] < -0.01), 'negative room');
+      });
+    });
+  }
+});
+
 console.log('Example plans');
 test('every example plan loads and projects', function () {
   ok(RP.examples.length >= 6);
