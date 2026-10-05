@@ -60,7 +60,9 @@
     };
   }
   function legend(c) {
-    return { position: 'top', align: 'start', labels: { color: c.text, boxWidth: 12, boxHeight: 8, padding: 12, font: { size: 11 } } };
+    var small = window.matchMedia && window.matchMedia('(max-width: 820px)').matches;
+    return { position: small ? 'bottom' : 'top', align: 'start',
+      labels: { color: c.text, boxWidth: small ? 10 : 12, boxHeight: 8, padding: small ? 8 : 12, font: { size: small ? 10 : 11 } } };
   }
   function tooltip(c, title) {
     return {
@@ -117,6 +119,7 @@
   function clickAge(cb) {
     return function (evt, els, chart) {
       if (!cb) return;
+      if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return;   // touch: tap = tooltip; use the table to add events
       var x = chart.scales.x;
       var idx = Math.round(x.getValueForPixel(evt.x));
       var age = chart.data.labels[idx];

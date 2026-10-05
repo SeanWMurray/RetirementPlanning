@@ -8,7 +8,7 @@
  * Development tooling only; the app itself needs none of this.
  */
 const path = require('path');
-const { chromium } = require('playwright');
+const { chromium, devices } = require('playwright');
 const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, 'docs', 'screenshots') + path.sep;
 (async () => {
@@ -62,6 +62,23 @@ const OUT = path.join(ROOT, 'docs', 'screenshots') + path.sep;
     await page.screenshot({ path: OUT + scheme + '-table-menu.png' });
     console.log(scheme, errors.length ? errors : 'ok');
     await page.close();
+  }
+  // Phone screenshots (iPhone-sized, 2x to keep files small)
+  for (const scheme of ['light', 'dark']) {
+    const ctx = await browser.newContext({ ...devices['iPhone 13'], deviceScaleFactor: 2, colorScheme: scheme });
+    const page = await ctx.newPage();
+    if (process.env.CHARTJS_PATH) await page.route('**/chart.umd.min.js', r => r.fulfill({ path: process.env.CHARTJS_PATH, contentType: 'application/javascript' }));
+    await page.goto('file://' + path.join(ROOT, 'index.html'));
+    await page.waitForTimeout(800);
+    await page.evaluate(() => { localStorage.clear(); RP.store.importJson(JSON.stringify(RP.examples[1].doc)); RP.store.setActive('base'); });
+    await page.evaluate(() => RP.app.setMobileView('results'));
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: OUT + 'mobile-' + scheme + '-results.png' });
+    await page.evaluate(() => RP.app.setMobileView('inputs'));
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: OUT + 'mobile-' + scheme + '-inputs.png' });
+    console.log('mobile ' + scheme + ' ok');
+    await ctx.close();
   }
   await browser.close();
 })();

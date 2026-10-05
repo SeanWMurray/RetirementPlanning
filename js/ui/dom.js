@@ -145,9 +145,18 @@
           h('span.menu-label', it.label), it.hint ? h('span.menu-hint', it.hint) : null);
       }));
     document.body.appendChild(m);
-    var r = m.getBoundingClientRect();
-    m.style.left = Math.max(0, Math.min(x, window.innerWidth - r.width - 4)) + 'px';
-    m.style.top = Math.max(0, Math.min(y, window.innerHeight - r.height - 4)) + 'px';
+    if (RP.app && RP.app.isMobile && RP.app.isMobile()) {
+      m.classList.add('sheet');                    // phones: full-width bottom sheet
+      m.appendChild(h('button.menu-item.menu-cancel', { type: 'button', onclick: function () { ui.closeMenu(); } }, h('span.menu-label', 'Cancel')));
+      var scrim = h('div.menu-scrim');
+      document.body.insertBefore(scrim, m);
+      var prevClose = opts && opts.onClose;
+      opts = Object.assign({}, opts, { onClose: function () { scrim.remove(); if (prevClose) prevClose(); } });
+    } else {
+      var r = m.getBoundingClientRect();
+      m.style.left = Math.max(0, Math.min(x, window.innerWidth - r.width - 4)) + 'px';
+      m.style.top = Math.max(0, Math.min(y, window.innerHeight - r.height - 4)) + 'px';
+    }
     openMenu = m;
     openMenuClose = opts && opts.onClose || null;
     setTimeout(function () {

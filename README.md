@@ -42,6 +42,14 @@ Every view comes in a light and a dark theme. The app follows your system settin
 - **Output.** Year-by-year table with selectable columns, CSV export, print/PDF, and today's-dollars vs future-dollars views.
 - **Saving.** Autosaves in your browser (localStorage). Export/import `.json` plan files, or drag a plan file onto the page. Undo/redo.
 
+### On phones
+
+On a phone the app switches to a mobile layout: results first, a bottom bar to switch between **Inputs** and **Results**, a live summary while you edit, bottom-sheet menus, full-screen dialogs and touch-sized controls.
+
+| Results | Inputs | Results (dark) | Inputs (dark) |
+|---|---|---|---|
+| <img src="docs/screenshots/mobile-light-results.png" width="190" alt="Phone: results"> | <img src="docs/screenshots/mobile-light-inputs.png" width="190" alt="Phone: inputs"> | <img src="docs/screenshots/mobile-dark-results.png" width="190" alt="Phone: results, dark"> | <img src="docs/screenshots/mobile-dark-inputs.png" width="190" alt="Phone: inputs, dark"> |
+
 ## Example plans
 
 Six ready-made plans with scenarios ship with the app. Open them with **File › Open Example…**, or download them from [`examples/`](examples/):

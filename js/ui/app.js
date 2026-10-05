@@ -145,7 +145,48 @@
     renderAll();
     app.status('Ready');
     document.addEventListener('keydown', onKey);
+    setMobileView(RP.store.ui.mview || 'results', true);
+    if (window.matchMedia) {
+      var mq = window.matchMedia(MOBILE_QUERY);
+      var onChange = function () { document.body.classList.toggle('is-mobile', mq.matches); app.renderTab(); };
+      if (mq.addEventListener) mq.addEventListener('change', onChange); else mq.addListener(onChange);
+      document.body.classList.toggle('is-mobile', mq.matches);
+    }
   };
+
+  // ---------------------------------------------------------------------------
+  // Phone layout: a compact header, one pane at a time (Inputs or Results),
+  // and a bottom navigation bar. Desktop layout is unchanged.
+  // ---------------------------------------------------------------------------
+  var MOBILE_QUERY = '(max-width: 820px)';
+  app.isMobile = function () { return !!(window.matchMedia && window.matchMedia(MOBILE_QUERY).matches); };
+
+  function setMobileView(v, initial) {
+    document.body.dataset.mview = v;
+    if (els.mnav) els.mnav.querySelectorAll('button[data-view]').forEach(function (b) {
+      var on = b.dataset.view === v;
+      b.classList.toggle('active', on); b.setAttribute('aria-selected', String(on));
+    });
+    RP.store.ui.mview = v; RP.store.saveUi();
+    if (!initial && app.isMobile()) {
+      window.scrollTo(0, 0);
+      if (els.main) els.main.scrollTop = 0;
+      if (els.sidebar) els.sidebar.querySelector('.sidebar-scroll').scrollTop = 0;
+      if (v === 'results') app.renderTab();   // charts need a visible container to size themselves
+    }
+  }
+  app.setMobileView = setMobileView;
+
+  /** All menu-bar menus in one bottom sheet (phones). */
+  function openMobileMenu() {
+    var items = [];
+    M.list().forEach(function (def, i) {
+      if (i) items.push({ separator: true });
+      items.push({ heading: def.label });
+      def.items().forEach(function (it) { if (!it.heading) items.push(it); });
+    });
+    ui.menu(0, 0, items);
+  }
 
   function onKey(e) {
     var mod = e.ctrlKey || e.metaKey;
@@ -259,10 +300,24 @@
     els.stSaved = h('span');
     els.stBasis = h('span');
 
+    // Phone chrome (hidden on desktop by CSS)
+    els.mtitle = h('span.m-title');
+    els.mbar = h('div.m-header', h('span.app-icon', appIcon()), els.mtitle);
+    els.msum = h('button.m-summary', { type: 'button', onclick: function () { setMobileView('results'); } });
+    els.sidebar.insertBefore(els.msum, els.sidebar.firstChild);
+    function navBtn(view, label, icon) {
+      return h('button', { type: 'button', role: 'tab', dataset: { view: view }, onclick: function () { setMobileView(view); } }, ui.icon(icon, 20), h('span', label));
+    }
+    els.mnav = h('nav.m-nav', { role: 'tablist', 'aria-label': 'View' },
+      navBtn('inputs', 'Inputs', 'edit'), navBtn('results', 'Results', 'csv'),
+      h('button', { type: 'button', onclick: openMobileMenu }, ui.icon('layers', 20), h('span', 'Menu')));
+
+    root.appendChild(els.mbar);
     root.appendChild(els.menubar);
     root.appendChild(els.toolbar);
     root.appendChild(h('div.workspace', els.sidebar, els.splitter, els.main));
     root.appendChild(h('footer.statusbar', els.msg, els.stEditing, els.stTax, els.stBasis, els.stSaved));
+    root.appendChild(els.mnav);
     root.appendChild(h('div.print-footer', 'Generated ' + new Date().toLocaleDateString('en-CA') + ' · Canadian Retirement Planner · estimates only, not financial advice'));
   }
 
@@ -312,6 +367,7 @@
     els.redo.disabled = !store.canRedo();
     if (document.activeElement !== els.name) els.name.value = store.doc.meta.name;
     els.title.textContent = store.doc.meta.name + ' — Canadian Retirement Planner';
+    if (els.mtitle) els.mtitle.textContent = store.doc.meta.name;
     document.title = store.doc.meta.name + ' — Retirement Planner';
   }
 
@@ -370,10 +426,21 @@
         h('div.kpi-value' + (status ? '.status-' + status : ''), k.format(v, act.result)),
         h('div.kpi-sub', k.sub ? k.sub(act.result) : '', delta ? ' · vs base ' : null, delta)));
     });
+    renderMobileSummary(act.result, real);
     els.kpis.appendChild(h('div.kpi.kpi-context',
       h('div.kpi-label', 'Scenario'),
       h('div.kpi-value.small', h('span.swatch', { style: { background: act.color } }), act.name),
       h('div.kpi-sub', real ? "Today's dollars" : 'Future dollars')));
+  }
+
+  function renderMobileSummary(r, real) {
+    if (!els.msum) return;
+    var lasts = K.get('lasts'), atRet = K.get('atRet');
+    var st = lasts.status(r);
+    ui.clear(els.msum);
+    els.msum.appendChild(h('span.m-sum-item', h('span.muted', 'Money lasts to'), h('b.status-' + st, lasts.format(lasts.value(r, real), r))));
+    els.msum.appendChild(h('span.m-sum-item', h('span.muted', 'At retirement'), h('b', atRet.format(atRet.value(r, real), r))));
+    els.msum.appendChild(h('span.m-sum-go', 'Results ›'));
   }
 
   function renderTabs() {
@@ -384,10 +451,15 @@
         type: 'button', role: 'tab', 'aria-selected': String(t.id === cur), onclick: function () { app.showTab(t.id); }
       }, t.label));
     });
+    var act = els.tabs.querySelector('.tab.active');
+    if (act && els.tabs.scrollWidth > els.tabs.clientWidth) {
+      els.tabs.scrollLeft = act.offsetLeft - (els.tabs.clientWidth - act.offsetWidth) / 2;
+    }
   }
 
   app.showTab = function (id, args) {
     tabArgs = args || null;
+    if (app.isMobile() && document.body.dataset.mview !== 'results') setMobileView('results', true);
     RP.store.doc.settings.activeTab = id;
     renderTabs();
     app.renderTab();
