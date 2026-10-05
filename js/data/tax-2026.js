@@ -12,6 +12,8 @@
  *
  * Brackets: [{ upTo: threshold or null for top bracket, rate }]
  * Credits are non-refundable and multiplied by `creditRate` (lowest bracket rate).
+ * `indexed: false` on an amount means it is fixed in law (not inflation-indexed), e.g. the federal
+ * $2,000 pension amount and most provinces' $1,000 pension amounts.
  */
 (function (RP) {
   'use strict';
@@ -34,7 +36,7 @@
       // BPA is reduced from max to min between the 4th bracket threshold and the top bracket.
       bpa: { max: 16452, min: 14829, phaseStart: 181440, phaseEnd: 258482 },
       age: { amount: 9208, threshold: 46432, reductionRate: 0.15, verify: true },
-      pension: { amount: 2000 },
+      pension: { amount: 2000, indexed: false },   // fixed in law
       canadaEmployment: { amount: 1501, verify: true },
       quebecAbatement: 0.165
     },
@@ -87,7 +89,7 @@
         ],
         bpa: { max: 13216 },
         age: { amount: 5927, threshold: 44119, reductionRate: 0.15, verify: true },
-        pension: { amount: 1000 },
+        pension: { amount: 1000, indexed: false },
         verify: true
       },
       MB: {
@@ -97,14 +99,14 @@
         // BPA phased out between $200k and $400k of net income (from 2025).
         bpa: { max: 15780, min: 0, phaseStart: 200000, phaseEnd: 400000 },
         age: { amount: 3728, threshold: 27749, reductionRate: 0.15 },
-        pension: { amount: 1000 }
+        pension: { amount: 1000, indexed: false }
       },
       NB: {
         name: 'New Brunswick',
         brackets: [{ upTo: 52333, rate: 0.094 }, { upTo: 104666, rate: 0.14 }, { upTo: 193861, rate: 0.16 }, { upTo: null, rate: 0.195 }],
         bpa: { max: 13664 },
         age: { amount: 6159, threshold: 45860, reductionRate: 0.15, verify: true },
-        pension: { amount: 1000 }
+        pension: { amount: 1000, indexed: false }
       },
       NL: {
         name: 'Newfoundland and Labrador',
@@ -115,7 +117,7 @@
         ],
         bpa: { max: 11188 },
         age: { amount: 7141, threshold: 38797, reductionRate: 0.15, verify: true },
-        pension: { amount: 1000 }
+        pension: { amount: 1000, indexed: false }
       },
       NS: {
         name: 'Nova Scotia',
@@ -125,21 +127,21 @@
         ],
         bpa: { max: 11932 },
         age: { amount: 5227, threshold: 31321, reductionRate: 0.15, verify: true },
-        pension: { amount: 1173 }
+        pension: { amount: 1173, indexed: false }
       },
       NT: {
         name: 'Northwest Territories',
         brackets: [{ upTo: 53003, rate: 0.059 }, { upTo: 106009, rate: 0.086 }, { upTo: 172346, rate: 0.122 }, { upTo: null, rate: 0.1405 }],
         bpa: { max: 18198 },
         age: { amount: 8901, threshold: 46432, reductionRate: 0.15, verify: true },
-        pension: { amount: 1000 }
+        pension: { amount: 1000, indexed: false }
       },
       NU: {
         name: 'Nunavut',
         brackets: [{ upTo: 55801, rate: 0.04 }, { upTo: 111602, rate: 0.07 }, { upTo: 181439, rate: 0.09 }, { upTo: null, rate: 0.115 }],
         bpa: { max: 19659 },
         age: { amount: 12255, threshold: 46432, reductionRate: 0.15, verify: true },
-        pension: { amount: 2000 }
+        pension: { amount: 2000, indexed: false }
       },
       ON: {
         name: 'Ontario',
@@ -170,7 +172,7 @@
         ],
         bpa: { max: 15000 },
         age: { amount: 6510, threshold: 36600, reductionRate: 0.15, verify: true },
-        pension: { amount: 1000 }
+        pension: { amount: 1000, indexed: false }
       },
       QC: {
         name: 'Quebec',
@@ -187,7 +189,7 @@
         brackets: [{ upTo: 54532, rate: 0.105 }, { upTo: 155805, rate: 0.125 }, { upTo: null, rate: 0.145 }],
         bpa: { max: 20381 },
         age: { amount: 5728, threshold: 42601, reductionRate: 0.15, verify: true },
-        pension: { amount: 1000 }
+        pension: { amount: 1000, indexed: false }
       },
       YT: {
         name: 'Yukon',
@@ -198,7 +200,7 @@
         // Yukon BPA mirrors the federal amount, including the high-income phase-out.
         bpa: { max: 16452, min: 14829, phaseStart: 181440, phaseEnd: 258482 },
         age: { amount: 9208, threshold: 46432, reductionRate: 0.15, verify: true },
-        pension: { amount: 2000 }
+        pension: { amount: 2000, indexed: false }
       }
     },
 

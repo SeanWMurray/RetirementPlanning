@@ -17,10 +17,10 @@ A 28-year-old renting in Toronto, saving whatever is left after spending. Lower 
 
 | Scenario | Portfolio at retirement | Ending portfolio | Money lasts |
 |---|--:|--:|---|
-| Base plan | $1.41M | $1.71M | to 95 ✓ |
-| Buy a condo at 35 | $882k | $857k | to 95 ✓ |
-| Aggressive saver — retire at 50 | $902k | $324k | to 95 ✓ |
-| Promotion track | $2.13M | $3.34M | to 95 ✓ |
+| Base plan | $1.43M | $1.75M | to 95 ✓ |
+| Buy a condo at 35 | $893k | $888k | to 95 ✓ |
+| Aggressive saver — retire at 50 | $911k | $353k | to 95 ✓ |
+| Promotion track | $2.15M | $3.40M | to 95 ✓ |
 
 ## Mid-career engineer — Calgary
 
@@ -31,11 +31,11 @@ A 42-year-old engineer in Alberta with sizeable RRSP savings, two kids heading t
 
 | Scenario | Portfolio at retirement | Ending portfolio | Money lasts |
 |---|--:|--:|---|
-| Base plan | $1.72M | $115k | to 95 ✓ |
-| Retire at 55 | $1.26M | $0 | runs short at 72 |
-| Retire at 55 + crash | $1.26M | $0 | runs short at 63 |
-| Defer CPP & OAS to 70 | $1.72M | $234k | to 95 ✓ |
-| 4% rule drawdown | $1.72M | $800k | spending not met from 60 |
+| Base plan | $1.73M | $132k | to 95 ✓ |
+| Retire at 55 | $1.27M | $0 | runs short at 72 |
+| Retire at 55 + crash | $1.27M | $0 | runs short at 63 |
+| Defer CPP & OAS to 70 | $1.73M | $252k | to 95 ✓ |
+| 4% rule drawdown | $1.73M | $814k | spending not met from 60 |
 
 ## Teacher with a DB pension — Halifax
 
@@ -46,10 +46,10 @@ A 50-year-old teacher with a defined-benefit pension (modelled as pension-income
 
 | Scenario | Portfolio at retirement | Ending portfolio | Money lasts |
 |---|--:|--:|---|
-| Base plan | $215k | $72k | to 95 ✓ |
-| Retire at 55 (reduced pension) | $174k | $0 | runs short at 62 |
-| Part-time tutoring | $215k | $265k | to 95 ✓ |
-| Long-term care at 85 | $215k | $0 | runs short at 86 |
+| Base plan | $216k | $71k | to 95 ✓ |
+| Retire at 55 (reduced pension) | $175k | $0 | runs short at 62 |
+| Part-time tutoring | $216k | $264k | to 95 ✓ |
+| Long-term care at 85 | $216k | $0 | runs short at 86 |
 
 ## Self-employed consultant — Montréal
 
@@ -60,10 +60,10 @@ A 45-year-old self-employed consultant in Quebec. Tax uses Quebec brackets, the 
 
 | Scenario | Portfolio at retirement | Ending portfolio | Money lasts |
 |---|--:|--:|---|
-| Base plan | $1.32M | $426k | to 95 ✓ |
-| Sell the business at 60 | $1.17M | $923k | to 95 ✓ |
-| Sabbatical at 50 | $1.16M | $85k | to 95 ✓ |
-| Returns 1.5 pp lower | $1.10M | $0 | runs short at 87 |
+| Base plan | $1.32M | $438k | to 95 ✓ |
+| Sell the business at 60 | $1.18M | $941k | to 95 ✓ |
+| Sabbatical at 50 | $1.17M | $95k | to 95 ✓ |
+| Returns 1.5 pp lower | $1.10M | $0 | runs short at 88 |
 
 ## Recently retired — Victoria
 
@@ -74,9 +74,9 @@ A 67-year-old who retired at 65, now drawing on a RRIF, TFSA and non-registered 
 
 | Scenario | Portfolio at retirement | Ending portfolio | Money lasts |
 |---|--:|--:|---|
-| Base plan | $1.02M | $66k | to 95 ✓ |
-| 4% rule | $1.02M | $720k | spending not met from 67 |
-| RRIF meltdown (draw RRIF first) | $1.02M | $25k | to 95 ✓ |
+| Base plan | $1.02M | $69k | to 95 ✓ |
+| 4% rule | $1.02M | $724k | spending not met from 67 |
+| RRIF meltdown (draw RRIF first) | $1.02M | $28k | to 95 ✓ |
 | Crash at 68 | $1.02M | $0 | runs short at 89 |
 
 ## Late starter — Winnipeg
@@ -88,8 +88,8 @@ A 52-year-old who started saving late and has a lot of unused RRSP and TFSA room
 
 | Scenario | Portfolio at retirement | Ending portfolio | Money lasts |
 |---|--:|--:|---|
-| Base plan | $182k | $0 | runs short at 70 |
-| Work to 67, CPP at 70 | $181k | $0 | runs short at 73 |
-| Cut spending 15% | $328k | $0 | runs short at 80 |
-| Inheritance at 60 | $334k | $0 | runs short at 76 |
-| All three: work to 67, spend less, inheritance | $512k | $261k | to 92 ✓ |
+| Base plan | $183k | $0 | runs short at 70 |
+| Work to 67, CPP at 70 | $183k | $0 | runs short at 73 |
+| Cut spending 15% | $331k | $0 | runs short at 80 |
+| Inheritance at 60 | $337k | $0 | runs short at 76 |
+| All three: work to 67, spend less, inheritance | $517k | $269k | to 92 ✓ |

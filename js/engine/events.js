@@ -208,7 +208,10 @@
         var amt = num(ev.amount) * (ev.indexed === false ? 1 : ctx.cpi);
         if (ev.kind === 'growth') {
           // A permanent raise/cut: keeps growing like the baseline it is part of.
-          var rate = key === 'income' ? num(ctx.plan.income.growth) : num(ctx.plan.assumptions.inflation);
+          var inf = num(ctx.plan.assumptions.inflation);
+          var rate = key === 'income' ? num(ctx.plan.income.growth)
+            : key === 'spending' ? RP.engine.spendingGrowth(ctx.plan.spending, ctx.age >= num(ctx.plan.profile.retirementAge), inf)
+            : inf;
           p.level = p.level == null ? 0 : p.level * (1 + rate);
           if (inRange(ev, ctx.age)) p.level += amt;
           y.mods[key + 'Add'] += p.level;

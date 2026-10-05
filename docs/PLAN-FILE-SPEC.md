@@ -66,7 +66,8 @@ You are generating a JSON plan file for a deterministic Canadian retirement proj
 | Ages | Whole years. The projection runs one row per age from `profile.currentAge` to `profile.endAge` inclusive. Age ranges in events are inclusive (`startAge` to `endAge`). |
 | Year | `profile.startYear` is the calendar year of the first row. |
 | `null` | Means "not set / use the default" where a field allows it. |
-| Timing | Withdrawals at the start of the year, contributions mid-year, balances reported at year end. |
+| Timing | Each year's flows are at that year's start-of-year prices. Withdrawals at the start of the year, contributions mid-year (half a year of growth and inflation), balances reported at year end. |
+| Inflation | One rate (`assumptions.inflation`) indexes today's-dollar amounts, tax brackets/credits, OAS, CPP/EI maximums and RRSP/TFSA limits. Returns, `income.growth`, and the optional spending/savings increases are nominal (they include inflation). |
 
 ---
 

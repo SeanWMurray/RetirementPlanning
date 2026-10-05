@@ -195,7 +195,7 @@
 
       // ---- Provincial ----
       var pRate = prov.brackets[0].rate;
-      var provPension = prov.pension ? Math.min(pension + (ctx.age >= 65 ? rrif : 0), prov.pension.amount * pIdx) : 0;
+      var provPension = prov.pension ? Math.min(pension + (ctx.age >= 65 ? rrif : 0), prov.pension.amount * (prov.pension.indexed === false ? 1 : pIdx)) : 0;
       var pCredits =
         tax.bpaAmount(prov.bpa, netIncome, pIdx) +
         tax.ageAmount(ctx.age, prov.age, netIncome, pIdx, ctx.age) +

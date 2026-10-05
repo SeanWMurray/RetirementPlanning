@@ -16,7 +16,8 @@
  *   6. record        — the year row used by the table, charts and analysis
  *
  * Conventions / simplifications (documented in the About tab):
- *   - Withdrawals occur at the start of the year; contributions mid-year (half a year of growth).
+ *   - Flows are stated at each year's start-of-year prices. Withdrawals occur at the start of the year;
+ *     contributions mid-year (half a year of growth and of inflation).
  *   - Non-registered growth is treated as deferred capital gains (taxed on withdrawal via ACB tracking).
  *   - Cash/HISA growth is treated as interest, taxed annually.
  *   - RRSP is converted to a RRIF with minimum withdrawals from age 72 (if enabled).
@@ -400,7 +401,10 @@
         if (a.type === 'nonreg' && a.start > 0 && w > 0) a.acb -= a.acb * Math.min(1, w / a.start);
         if (a.type === 'nonreg') a.acb += c;
         var after = Math.max(0, a.start - w);
-        var end = after * (1 + a.r) + c * (1 + a.r / 2);
+        // Each year's flows are stated at start-of-year prices (cpi). A contribution invested mid-year
+        // therefore carries half a year of inflation as well as half a year of compound growth;
+        // without the inflation half, savings would leak ~inf/2 in real terms every year.
+        var end = after * (1 + a.r) + c * Math.sqrt((1 + a.r) * (1 + inf));
         growthAmt += end - after - c;
         a.bal = Math.max(0, end);
         a.wTotal = w; a.cTotal = c;

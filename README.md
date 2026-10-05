@@ -149,7 +149,7 @@ The tests cover bracket math, CPP/EI maximums, the OAS clawback, the Quebec abat
 
 See the **Notes & method** tab in the app for the full methodology. In brief:
 - Single person (no spousal planning or pension splitting yet).
-- Contributions are made mid-year and withdrawals at the start of the year.
+- Contributions are made mid-year and withdrawals at the start of the year. One inflation index drives every indexed amount; with only indexed rules the plan is inflation-neutral (real results identical at any inflation rate; covered by a test). Amounts that are fixed in law (federal $2,000 pension amount, most provincial pension amounts, the CPP basic exemption, Ontario Health Premium thresholds) are not indexed.
 - Non-registered growth is treated as deferred capital gains at 50% inclusion.
 - CPP is indexed from your entered estimate rather than modelled from your earnings history.
 - No dividend tax credit, AMT or low-income provincial reductions.

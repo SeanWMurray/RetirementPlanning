@@ -342,6 +342,57 @@ test('dollar adjustments: required fields, summary and backwards compatibility',
   ok(/permanent/.test(RP.events.describe({ type: 'adjustment', target: 'income', kind: 'growth', unit: 'dollars', amount: 150000, startAge: 33, endAge: 33 })));
 });
 
+console.log('Inflation');
+function neutralPlan(inf, extra) {
+  var p = RP.scenarios.effective(RP.schema.newDocument(), 'base');
+  function nom(r) { return (1 + r) * (1 + inf) - 1; }
+  p.assumptions.inflation = inf; p.assumptions.returnPre = nom(0.035); p.assumptions.returnPost = nom(0.025);
+  p.income.growth = nom(0.01);
+  p.tax.mode = 'custom'; p.tax.includePayroll = false; p.savings.enforceRoom = false;   // only fully-indexed rules
+  p.accounts = p.accounts.filter(function (a) { return a.type === 'rrsp' || a.type === 'tfsa'; });
+  p.accounts.forEach(function (a) { a.contribLimit = 'unlimited'; });
+  if (extra) extra(p, nom);
+  return p;
+}
+test('inflation-neutral: with fully indexed rules, real results are identical at 0% and 3% inflation', function () {
+  [null,
+   function (p, nom) { p.spending.growthWorking = nom(0.01); p.spending.growthRetired = nom(-0.01); },
+   function (p) { p.events = [Object.assign(RP.events.create('expense', 50, p), { amount: 40000, everyYears: 5, endAge: 80 }),
+     Object.assign(RP.events.create('adjustment', 40, p), { target: 'income', kind: 'growth', unit: 'dollars', amount: 30000, endAge: 40 }),
+     Object.assign(RP.events.create('adjustment', 56, p), { target: 'spending', kind: 'growth', unit: 'dollars', amount: -10000, endAge: 56 })]; },
+   function (p) { p.savings.mode = 'fixed'; p.retirement.strategy = 'fixedReal'; }
+  ].forEach(function (extra, k) {
+    var a = RP.engine.project(neutralPlan(0, extra)), b = RP.engine.project(neutralPlan(0.03, extra));
+    a.years.forEach(function (ya, i) {
+      var yb = b.years[i];
+      near(yb.total / yb.cpiEnd, ya.total, Math.max(5, ya.total * 1e-4), 'case ' + k + ' balance age ' + ya.age);
+      ['spending', 'tax', 'contributions', 'withdrawals', 'employment', 'cpp', 'oas'].forEach(function (f) {
+        near(yb[f] / yb.cpi, ya[f], Math.max(1, Math.abs(ya[f]) * 1e-4), 'case ' + k + ' ' + f + ' age ' + ya.age);
+      });
+    });
+  });
+});
+test('mid-year contributions keep their real value (no half-year inflation leak)', function () {
+  var p = neutralPlan(0.05); p.assumptions.returnPre = 0.05;   // zero real return
+  p.accounts.forEach(function (a) { a.balance = 0; });
+  var y = RP.engine.project(p).years[0];
+  near(y.total / y.cpiEnd, y.contributions / y.cpi, 0.5);
+});
+test('permanent $ spending change follows the spending growth rate', function () {
+  var p = RP.util.clone(plan); p.spending.growthRetired = 0.0;   // flat nominal spending in retirement
+  p.events = [Object.assign(RP.events.create('adjustment', 60, p), { target: 'spending', kind: 'growth', unit: 'dollars', amount: -10000, indexed: false, endAge: 60 })];
+  var r = RP.engine.project(p);
+  near(rowAt(r, 70).spendingBase - rowAt(r, 60).spendingBase, 0, 0.5, 'both base and the cut stay flat');
+});
+test('fixed-in-law credits are not indexed (federal and most provincial pension amounts)', function () {
+  var inc = { pension: 3000 }, c1 = ctx('BC', 70), c2 = ctx('BC', 70); c2.index = 1.5;
+  var t1 = RP.tax.compute(inc, c1), t2 = RP.tax.compute(inc, c2);
+  ok(t1.federalCredits > 0);
+  // Pension amounts must not scale with the index (BPA/age amounts do).
+  near(t2.federalCredits - t1.federalCredits, (d.federal.bpa.max + RP.tax.ageAmount(70, d.federal.age, 3000, 1, 70)) * 0.5, 1);
+  near(t2.provincialCredits - t1.provincialCredits, (d.provinces.BC.bpa.max + RP.tax.ageAmount(70, d.provinces.BC.age, 3000, 1, 70)) * 0.5, 1);
+});
+
 console.log('Review fixes (regressions)');
 test('OAS stays inflation-indexed when tax brackets are not', function () {
   var p2 = RP.util.clone(plan); p2.tax.indexBrackets = false; p2.profile.currentAge = 64; p2.profile.retirementAge = 64;
