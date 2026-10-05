@@ -151,6 +151,78 @@ test('huge spending -> shortfall detected', function () {
   ok(!r2.summary.success && r2.summary.firstShortfallAge != null);
 });
 
+console.log('Contributions & room');
+function rowAt(r, age) { return r.years.filter(function (y) { return y.age === age; })[0]; }
+test('TFSA limit indexes in $500 steps', function () {
+  ok(RP.engine.tfsaLimit(2026, d, 0.02) === 7000);
+  ok(RP.engine.tfsaLimit(2030, d, 0.02) === 7500, 'got ' + RP.engine.tfsaLimit(2030, d, 0.02));
+  ok(RP.engine.tfsaLimit(2040, d, 0.02) % 500 === 0);
+});
+test('TFSA contributions never exceed cumulative room', function () {
+  var r = RP.engine.project(plan);
+  var room = 0, prevW = 0;
+  r.years.forEach(function (y) {
+    room += RP.engine.tfsaLimit(y.year, d, plan.assumptions.inflation) + prevW;
+    ok(y.contribByAccount.tfsa <= room + 0.01, 'age ' + y.age);
+    room -= y.contribByAccount.tfsa;
+    near(y.roomByAccount.tfsa, room, 0.5, 'room age ' + y.age);
+    prevW = y.withdrawByAccount.tfsa;
+  });
+});
+test('starting TFSA room is used in year one', function () {
+  var p2 = RP.util.clone(plan); p2.accounts[1].startingRoom = 50000;
+  p2.savings.order = ['tfsa', 'rrsp', 'cash', 'nonreg'];
+  var r = RP.engine.project(p2);
+  var y0 = rowAt(r, 35);
+  ok(y0.contribByAccount.tfsa > 15000, 'tfsa ' + y0.contribByAccount.tfsa);
+  near(y0.contribByAccount.rrsp, 0, 0.01, 'rrsp');
+  near(rowAt(r, 35).roomByAccount.tfsa, 50000 - rowAt(r, 35).contribByAccount.tfsa, 0.5);
+});
+test('RRSP room = 18% of prior-year earnings', function () {
+  var p2 = RP.util.clone(plan); p2.accounts[0].startingRoom = 0;
+  var r = RP.engine.project(p2);
+  near(rowAt(r, 35).contribByAccount.rrsp, 0, 0.01);
+  near(rowAt(r, 36).contribByAccount.rrsp, 0.18 * rowAt(r, 35).employment, 1);
+});
+test('custom amount and "none" modes', function () {
+  var p2 = RP.util.clone(plan);
+  p2.accounts[1].contribLimit = 'custom'; p2.accounts[1].contributionCap = 2000;
+  p2.accounts[0].contribLimit = 'none';
+  var r = RP.engine.project(p2);
+  near(rowAt(r, 40).contribByAccount.tfsa, 2000 * rowAt(r, 40).cpi, 1);
+  near(rowAt(r, 40).contribByAccount.rrsp, 0, 0.01);
+});
+test('contribution event overrides an account for an age range', function () {
+  var p2 = RP.util.clone(plan);
+  var ev = RP.events.create('contribution', 40, p2);
+  Object.assign(ev, { accountId: 'rrsp', mode: 'none', startAge: 40, endAge: 44 });
+  p2.events = [ev];
+  var r = RP.engine.project(p2);
+  near(rowAt(r, 42).contribByAccount.rrsp, 0, 0.01);
+  ok(rowAt(r, 45).contribByAccount.rrsp > 0);
+});
+test('no RRSP contributions after 71', function () {
+  var p2 = RP.util.clone(plan); p2.profile.retirementAge = 80;
+  var r = RP.engine.project(p2);
+  near(rowAt(r, 75).contribByAccount.rrsp, 0, 0.01);
+});
+test('surplus with no account able to take it is reported, not lost', function () {
+  var p2 = RP.util.clone(plan);
+  p2.accounts.forEach(function (a) { a.contribLimit = a.type === 'nonreg' ? 'none' : a.contribLimit; });
+  var r = RP.engine.project(p2);
+  ok(rowAt(r, 40).unallocated > 0);
+  r.years.forEach(function (y) {
+    near(y.incomeTotal + y.withdrawals + y.shortfall, y.tax + y.spending + y.contributions + y.unallocated, 2, 'age ' + y.age);
+  });
+});
+test('v1 plan files migrate to explicit contribution modes', function () {
+  var old = { app: 'canadian-retirement-planner', schemaVersion: 1, base: { accounts: [
+    { id: 'a', type: 'tfsa', contributionCap: 7000 }, { id: 'b', type: 'nonreg', contributionCap: null }, { id: 'c', type: 'cash', contributionCap: 0 }] } };
+  var n = RP.schema.normalize(old);
+  ok(n.schemaVersion === 2);
+  ok(n.base.accounts.map(function (a) { return a.contribLimit; }).join() === 'custom,unlimited,none');
+});
+
 console.log('Scenarios & analysis');
 test('scenario override applies, base unchanged', function () {
   var d2 = RP.util.clone(doc);

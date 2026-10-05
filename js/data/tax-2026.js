@@ -213,8 +213,9 @@
 
     capitalGainsInclusion: 0.5,
 
-    // Contribution limits (for reference / default caps).
-    limits: { rrspMax: 33810, rrspPct: 0.18, tfsaAnnual: 7000 }
+    // Registered contribution limits. Future years are indexed by the plan's inflation rate:
+    // TFSA rounded to the nearest $500 (CRA rule); RRSP dollar max rounded to $10.
+    limits: { rrspMax: 33810, rrspPct: 0.18, tfsaAnnual: 7000, tfsaRounding: 500 }
   };
 
   RP.taxData.latest = '2026';

@@ -21,6 +21,7 @@
  *   y.mods.income / y.mods.spending / y.mods.savings   multiplicative factors (default 1)
  *   y.mods.returnOverride  (number|null)  replaces the portfolio return this year
  *   y.mods.returnDelta     (number)       added to the portfolio return this year
+ *   y.mods.contrib[accountId] = { mode: 'custom'|'legal'|'none', amount }  overrides an account's contribution limit
  *   y.extraIncome.push({ label, amount, taxType: 'other'|'pension'|'nontaxable' })
  *   y.extraExpenses.push({ label, amount })
  * `ctx` = { plan, t, age, cpi, persist } where persist is a per-event scratch object
@@ -228,6 +229,51 @@
     }
   });
 
+  // ---------------------------------------------------------------------------
+  function accountOptions() {
+    var plan = RP.store ? RP.store.effective() : null;
+    return (plan ? plan.accounts : []).map(function (a) { return { value: a.id, label: a.name }; });
+  }
+  function accountName(id) {
+    var o = accountOptions().filter(function (x) { return x.value === id; })[0];
+    return o ? o.label : id;
+  }
+  var CONTRIB_MODES = [
+    { value: 'custom', label: "Contribute up to a set amount (today's $)" },
+    { value: 'legal', label: 'Contribute up to available room / no limit' },
+    { value: 'none', label: 'Stop contributing' }
+  ];
+  types.register({
+    id: 'contribution',
+    label: 'Contribution change',
+    description: 'Override how much goes into one account for a range of ages, e.g. max the TFSA from 40–50, $10k/yr to the RRSP after a raise, or stop RRSP contributions at 55. Still subject to RRSP/TFSA room when room is enforced.',
+    color: 'var(--ev-income)',
+    fields: [
+      { key: 'label', label: 'Name', type: 'text' },
+      { key: 'accountId', label: 'Account', type: 'select', options: accountOptions },
+      { key: 'mode', label: 'Change', type: 'select', options: CONTRIB_MODES },
+      { key: 'amount', label: "Annual amount (today's $)", type: 'money', help: 'Used with "up to a set amount".' },
+      rangeFields[0], rangeFields[1]
+    ],
+    defaults: function (age, plan) {
+      var acct = plan && plan.accounts.filter(function (a) { return a.type === 'tfsa'; })[0] || (plan && plan.accounts[0]);
+      return { label: 'Contribution change', accountId: acct ? acct.id : null, mode: 'custom', amount: 10000, startAge: age, endAge: Math.min(age + 9, plan ? plan.profile.endAge : age + 9) };
+    },
+    presets: [
+      { label: 'Max out TFSA', values: { label: 'Max TFSA', mode: 'legal', accountType: 'tfsa', endAgeOffset: 9 } },
+      { label: 'Stop RRSP contributions', values: { label: 'Stop RRSP', mode: 'none', accountType: 'rrsp', endAgeOffsetToEnd: true } }
+    ],
+    isActive: function (ev, age) { return inRange(ev, age); },
+    summary: function (ev) {
+      var what = ev.mode === 'none' ? 'stop' : ev.mode === 'legal' ? 'max out' : fmt.money(num(ev.amount)) + '/yr';
+      return accountName(ev.accountId) + ': ' + what + ', ' + ageRangeText(ev);
+    },
+    apply: function (ev, y, ctx) {
+      if (!ev.accountId || !inRange(ev, ctx.age)) return;
+      y.mods.contrib[ev.accountId] = { mode: ev.mode || 'custom', amount: num(ev.amount) };
+    }
+  });
+
   /** Build a new event of `typeId` at `age`, optionally applying a preset. */
   RP.events.create = function (typeId, age, plan, preset) {
     var def = types.get(typeId);
@@ -237,6 +283,11 @@
       var v = Object.assign({}, preset.values);
       if (v.endAgeOffset != null) { ev.endAge = age + v.endAgeOffset; delete v.endAgeOffset; }
       if (v.endAgeOffsetToEnd) { ev.endAge = plan ? plan.profile.endAge : age + 20; delete v.endAgeOffsetToEnd; }
+      if (v.accountType) {
+        var match = plan && plan.accounts.filter(function (a) { return a.type === v.accountType; })[0];
+        if (match) ev.accountId = match.id;
+        delete v.accountType;
+      }
       Object.assign(ev, v);
     }
     if (ev.endAge != null && plan) ev.endAge = Math.min(ev.endAge, plan.profile.endAge);

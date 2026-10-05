@@ -45,6 +45,34 @@
     return 1 / (90 - age);
   }
 
+  /** Contribution limit mode for an account (older plans only had a numeric cap). */
+  engine.limitMode = function (a) {
+    if (a.contribLimit) return a.contribLimit;
+    if (a.contributionCap === '' || a.contributionCap == null) return 'unlimited';
+    return num(a.contributionCap) === 0 ? 'none' : 'custom';
+  };
+
+  /** TFSA annual limit: indexed to inflation, rounded to the nearest $500 (CRA rule). */
+  engine.tfsaLimit = function (year, d, inf) {
+    var L = d.limits || {};
+    var base = num(L.tfsaAnnual, 7000);
+    if (year <= d.year) return base;
+    var step = num(L.tfsaRounding, 500);
+    return Math.max(base, Math.round(base * Math.pow(1 + inf, year - d.year) / step) * step);
+  };
+
+  /** RRSP dollar maximum for a year (indexed; CRA indexes to average wage growth, approximated by inflation). */
+  engine.rrspMax = function (year, d, inf) {
+    var L = d.limits || {};
+    var base = num(L.rrspMax, 33810);
+    return year <= d.year ? base : Math.round(base * Math.pow(1 + inf, year - d.year) / 10) * 10;
+  };
+
+  /** Prior-year earned income used for the first year's RRSP room estimate. */
+  function salary0Initial(plan) {
+    return num(plan.income.salary) / (1 + num(plan.income.growth));
+  }
+
   engine.project = function (plan, opts) {
     opts = opts || {};
     var lite = !!opts.lite;
@@ -68,9 +96,15 @@
         bal: Math.max(0, num(a.balance)),
         acb: a.type === 'nonreg' ? Math.max(0, num(a.costBase, num(a.balance))) : 0,
         returnRate: a.returnRate === '' || a.returnRate == null ? null : num(a.returnRate),
-        cap: a.contributionCap === '' || a.contributionCap == null ? null : num(a.contributionCap)
+        cap: a.contributionCap === '' || a.contributionCap == null ? null : num(a.contributionCap),
+        limitMode: engine.limitMode(a),
+        startingRoom: a.startingRoom === '' || a.startingRoom == null ? null : Math.max(0, num(a.startingRoom)),
+        room: null, wPrev: 0
       };
     });
+    var enforceRoom = plan.savings.enforceRoom !== false;
+    var limits = d.limits || {};
+    var prevEmployment = salary0Initial(plan);
     var byId = {};
     accts.forEach(function (a) { byId[a.id] = a; });
     function ordered(list) {
@@ -100,7 +134,7 @@
 
       var y = {
         t: t, age: age, year: year, cpi: cpi, cpiEnd: cpi * (1 + inf), retired: retired,
-        mods: { income: 1, spending: 1, savings: 1, returnOverride: null, returnDelta: 0 },
+        mods: { income: 1, spending: 1, savings: 1, returnOverride: null, returnDelta: 0, contrib: {} },
         extraIncome: [], extraExpenses: [], activeEvents: []
       };
 
@@ -125,6 +159,19 @@
         else exOther += x.amount;
       });
       y.otherIncome = exOther + exPension + exNonTax;
+
+      // Registered contribution room (RRSP / TFSA) available this year
+      accts.forEach(function (a) {
+        if (a.type === 'tfsa') {
+          var newRoom = engine.tfsaLimit(year, d, inf);
+          if (t === 0) a.room = a.startingRoom != null ? a.startingRoom : newRoom;
+          else a.room += newRoom + a.wPrev;          // withdrawals are re-added the following year
+        } else if (a.type === 'rrsp') {
+          var earned = Math.min(num(limits.rrspPct, 0.18) * prevEmployment, engine.rrspMax(year, d, inf));
+          if (t === 0) a.room = a.startingRoom != null ? a.startingRoom : earned;
+          else a.room += earned;
+        }
+      });
 
       // 3. Spending
       var S = plan.spending, base;
@@ -196,19 +243,35 @@
         return RP.tax.compute(inc, taxCtx);
       }
 
-      // Allocate contribution C across accounts (respecting caps). Returns per-account map + RRSP total.
+      // How much each account can take this year: limit mode (or a contribution event), capped by room.
+      function capacity(a, allowRRSP) {
+        if (a.type === 'rrsp' && (!allowRRSP || age > 71)) return 0;   // no RRSP contributions after 71
+        var ov = y.mods.contrib[a.id];
+        var mode = ov ? ov.mode : a.limitMode;
+        var amt;
+        if (mode === 'none') return 0;
+        if (mode === 'custom') amt = (ov ? ov.amount : num(a.cap)) * cpi;
+        else if (mode === 'legal') amt = a.room != null ? a.room : Infinity;
+        else amt = Infinity;
+        if (enforceRoom && a.room != null) amt = Math.min(amt, a.room);
+        return Math.max(0, amt);
+      }
+
+      // Allocate contribution C across accounts in contribution order. Anything no account can take stays unallocated.
       function allocate(C, allowRRSP) {
-        var res = { map: {}, rrsp: 0 };
+        var res = { map: {}, rrsp: 0, total: 0 };
         var left = C;
-        var list = contribOrder.filter(function (a) { return allowRRSP || a.type !== 'rrsp'; });
-        if (!list.length) list = contribOrder;
-        for (var i = 0; i < list.length && left > 0.005; i++) {
-          var a = list[i];
-          var room = a.cap == null || i === list.length - 1 ? Infinity : Math.max(0, a.cap * cpi - (res.map[a.id] || 0));
-          var amt = Math.min(left, room);
-          if (amt > 0) { res.map[a.id] = (res.map[a.id] || 0) + amt; left -= amt; if (a.type === 'rrsp') res.rrsp += amt; }
+        for (var i = 0; i < contribOrder.length && left > 0.005; i++) {
+          var a = contribOrder[i];
+          var amt = Math.min(left, capacity(a, allowRRSP));
+          if (amt > 0) { res.map[a.id] = amt; left -= amt; res.total += amt; if (a.type === 'rrsp') res.rrsp += amt; }
         }
         return res;
+      }
+      function totalCapacity(allowRRSP) {
+        var s2 = 0;
+        contribOrder.forEach(function (a) { s2 += capacity(a, allowRRSP); });
+        return s2;
       }
 
       // Draw gross G from accounts in withdrawal order. Returns taxable pieces.
@@ -257,7 +320,7 @@
 
       if (!retired) {
         // ---- Accumulation ----
-        var cap = target == null ? Infinity : Math.max(0, target);
+        var cap = Math.min(target == null ? Infinity : Math.max(0, target), totalCapacity(true));
         var X = function (Cc) {
           var al = allocate(Cc, true);
           var tr = taxWith({ rrspDeduction: al.rrsp });
@@ -302,8 +365,9 @@
         taxRes = taxWith({ rrif: wd.rrif, capitalGains: wd.capitalGains });
         var cashNet = cashIn + wd.total - taxRes.totalWithPayroll - y.spending;
         if (cashNet > 0.5) {
-          contrib = allocate(cashNet, false);   // reinvest surplus (no new RRSP room assumed)
-          C = cashNet;
+          contrib = allocate(cashNet, false);   // reinvest surplus outside the RRSP
+          C = contrib.total;
+          unallocated = cashNet - C;
         } else if (cashNet < -0.5 && target != null) {
           shortfall = -cashNet;
         }
@@ -321,8 +385,11 @@
         growthAmt += end - after - c;
         a.bal = Math.max(0, end);
         a.wTotal = w; a.cTotal = c;
+        if (a.room != null) a.room = Math.max(0, a.room - c);
+        a.wPrev = a.type === 'tfsa' ? w : 0;
         endTotal += a.bal;
       });
+      prevEmployment = y.employment;
 
       // 6. Record
       var totalW = rrifMin + wd.total;
@@ -330,8 +397,8 @@
         years.push({ age: age, startTotal: startTotal, total: endTotal, real: endTotal / y.cpiEnd, shortfall: shortfall, tax: taxRes.totalWithPayroll, spending: y.spending, cpi: cpi, cpiEnd: y.cpiEnd });
         continue;
       }
-      var balances = {}, contribs = {}, withdrawals = {};
-      accts.forEach(function (a) { balances[a.id] = a.bal; contribs[a.id] = a.cTotal; withdrawals[a.id] = a.wTotal; });
+      var balances = {}, contribs = {}, withdrawals = {}, room = {};
+      accts.forEach(function (a) { balances[a.id] = a.bal; contribs[a.id] = a.cTotal; withdrawals[a.id] = a.wTotal; if (a.room != null) room[a.id] = a.room; });
       years.push({
         t: t, age: age, year: year, cpi: cpi, cpiEnd: y.cpiEnd, retired: retired,
         employment: y.employment, cpp: y.cpp, oas: y.oas, otherIncome: y.otherIncome, interest: interest,
@@ -343,7 +410,7 @@
         taxInputs: { employment: y.employment, other: exOther + interest, pension: exPension, cpp: y.cpp, oas: y.oas,
           rrif: rrifMin + wd.rrif, capitalGains: wd.capitalGains, rrspDeduction: contrib.rrsp },
         taxCtx: taxCtx,
-        contributions: C, contribByAccount: contribs, rrspContribution: contrib.rrsp,
+        contributions: C, contribByAccount: contribs, roomByAccount: room, rrspContribution: contrib.rrsp,
         withdrawals: totalW, withdrawByAccount: withdrawals, rrifMin: rrifMin,
         unallocated: unallocated, shortfall: shortfall, growth: growthAmt,
         balances: balances, startTotal: startTotal, total: endTotal,

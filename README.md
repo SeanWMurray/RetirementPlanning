@@ -22,7 +22,8 @@ Every view comes in a light and a dark theme. The app follows your system settin
 ## Features
 
 - **Tax engine.** Federal plus every province and territory, using 2026 brackets. It handles the basic personal amount (with phase-outs), age, pension and Canada employment amounts, and CPP/QPP, EI and QPIP. It also covers enhanced CPP deductions, the OAS clawback, the Ontario surtax and Health Premium, and the Quebec abatement. Brackets index forward with inflation. You can override with a flat rate or your own brackets.
-- **Accounts.** RRSP/RRIF (deductible contributions, taxable withdrawals, RRIF minimums from 72), TFSA, non-registered (cost base tracked, capital gains taxed on withdrawal) and cash/HISA (interest taxed annually). Contribution and withdrawal orders are configurable, with per-account caps and return overrides.
+- **Accounts.** RRSP/RRIF (deductible contributions, taxable withdrawals, RRIF minimums from 72), TFSA, non-registered (cost base tracked, capital gains taxed on withdrawal) and cash/HISA (interest taxed annually). Contribution and withdrawal orders are configurable, with per-account return overrides.
+- **Contributions & room.** Each account takes savings up to its contribution room, a set annual amount, no limit, or nothing. RRSP room is 18% of the prior year's earned income up to the indexed maximum, with no contributions after 71. TFSA room uses the annual limit indexed in $500 steps, carries unused room forward and re-adds withdrawals the following year. You can enter your current unused room from CRA My Account or your Notice of Assessment. A *Contribution change* event overrides any account for a range of ages, for example maxing the TFSA from 40–50 or stopping RRSP contributions at 55.
 - **Government benefits.** CPP with early/late adjustment and OAS with deferral, residency, the 10% boost at 75, and the clawback.
 - **Spending.** One total, or itemised lines tagged "always", "working" or "retired". Includes a percentage change at retirement.
 - **Savings.** Save the whole surplus, a percentage of salary, or a fixed amount.
@@ -116,9 +117,10 @@ See the **Notes & method** tab in the app for the full methodology. In brief:
 - Contributions are made mid-year and withdrawals at the start of the year.
 - Non-registered growth is treated as deferred capital gains at 50% inclusion.
 - CPP is indexed from your entered estimate rather than modelled from your earnings history.
-- No dividend tax credit, AMT, low-income provincial reductions or contribution-room tracking.
+- No dividend tax credit, AMT or low-income provincial reductions.
+- Contribution room is tracked but simplified: RRSP room uses employment income only (no pension adjustment), and the RRSP maximum is indexed with inflation rather than average wage growth.
 
-Ideas for later: spouse/household modelling with pension splitting; guardrail withdrawal strategies; RRSP meltdown/CPP-timing optimisers; TFSA/RRSP room tracking; dividend and distribution modelling; shareable plan links.
+Ideas for later: spouse/household modelling with pension splitting; guardrail withdrawal strategies; RRSP meltdown/CPP-timing optimisers; pension adjustments; dividend and distribution modelling; shareable plan links.
 
 ## Disclaimer
 

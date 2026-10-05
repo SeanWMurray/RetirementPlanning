@@ -107,11 +107,18 @@
       var wrap = h('div.accounts');
       p.accounts.forEach(function (a, i) {
         var base = 'accounts.' + i + '.';
+        var registered = a.type === 'rrsp' || a.type === 'tfsa';
+        var mode = RP.engine.limitMode(a);
         var defs = [
           { path: base + 'name', label: 'Name', type: 'text' },
           { path: base + 'type', label: 'Type', type: 'select', options: RP.schema.ACCOUNT_TYPES },
           { path: base + 'balance', label: 'Current balance', type: 'money', min: 0 },
-          { path: base + 'contributionCap', label: "Annual contribution cap (today's $)", type: 'money', nullable: true, placeholder: 'no cap', help: 'Leave blank for no cap. RRSP: 18% of income to the annual maximum. TFSA: $7,000/yr plus unused room.' },
+          { path: base + 'contribLimit', label: 'Contributions', type: 'select', options: limitOptions(a),
+            help: registered ? 'Up to contribution room: the engine tracks your ' + a.type.toUpperCase() + ' room each year (' + (a.type === 'tfsa' ? 'annual limit indexed in $500 steps, unused room carries forward, withdrawals are re-added the next year' : '18% of last year’s earned income up to the indexed maximum; no contributions after 71') + ').' : 'How much of your savings this account can take each year. Savings fill accounts in the contribution order (Savings section).' },
+          mode === 'custom' ? { path: base + 'contributionCap', label: "Annual amount (today's $)", type: 'money', min: 0, help: registered ? 'Contributes up to this amount each year (inflation-indexed), never more than your available room when room is enforced.' : 'Contributes up to this amount each year (inflation-indexed).' } : null,
+          registered ? { path: base + 'startingRoom', label: a.type === 'tfsa' ? 'Unused TFSA room now' : 'RRSP deduction limit now', type: 'money', nullable: true, min: 0,
+            placeholder: a.type === 'tfsa' ? "this year's limit" : 'estimate',
+            help: a.type === 'tfsa' ? 'Your TFSA contribution room on January 1 (CRA My Account). Blank = only this year’s new limit.' : 'From your latest Notice of Assessment (“RRSP deduction limit”). Blank = estimate 18% of last year’s salary.' } : null,
           a.type === 'nonreg' ? { path: base + 'costBase', label: 'Adjusted cost base', type: 'money', min: 0, help: 'Used to work out the taxable capital gain on withdrawals.' } : null,
           { path: base + 'returnRate', label: 'Return override', type: 'percent', nullable: true, placeholder: 'plan default', help: 'Leave blank to use the plan’s return assumptions.' }
         ];
@@ -127,12 +134,16 @@
       });
       wrap.appendChild(ui.button('Add account', function () {
         var arr = U.clone(store().get('accounts'));
-        arr.push({ id: U.uid('acct'), name: 'New account', type: 'tfsa', balance: 0, contributionCap: null, returnRate: null });
+        arr.push({ id: U.uid('acct'), name: 'New account', type: 'nonreg', balance: 0, costBase: 0, contribLimit: 'unlimited', contributionCap: null, returnRate: null });
         store().set('accounts', arr, { structural: true });
       }, { icon: 'plus', cls: 'ghost small' }));
       return wrap;
     }
   });
+
+  function limitOptions(a) {
+    return RP.schema.CONTRIBUTION_LIMITS.filter(function (o) { return o.value !== 'legal' || a.type === 'rrsp' || a.type === 'tfsa' || RP.engine.limitMode(a) === 'legal'; });
+  }
 
   /** Re-orderable list of account ids bound to a path. */
   function orderList(path, label, help) {
@@ -176,7 +187,9 @@
           options: RP.savingsModes.list().map(function (m) { return { value: m.id, label: m.label }; }) }]),
         note(mode.description),
         ui.fields(mode.fields.map(function (f) { return defs[f]; })),
-        orderList('savings.order', 'Contribution order', 'Savings fill accounts top to bottom, up to each account’s annual cap. The last account takes any overflow.'));
+        orderList('savings.order', 'Contribution order', 'Savings fill accounts top to bottom, each up to its contribution limit (set per account under Accounts & balances). Savings no account can take are shown as “Unsaved surplus”.'),
+        ui.fields([{ path: 'savings.enforceRoom', label: 'Enforce RRSP / TFSA contribution room', type: 'toggle', wide: true }]),
+        note('To change an account’s contributions for certain ages (e.g. max the TFSA from 40–50), add a “Contribution change” event (Insert menu).'));
     }
   });
 

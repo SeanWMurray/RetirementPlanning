@@ -28,7 +28,8 @@
   c({ id: 'eventExpenses', label: 'Event costs', group: 'Spending', kind: 'flow', get: function (y) { return y.eventExpenses; }, default: false });
   c({ id: 'spending', label: 'Spending', group: 'Spending', kind: 'flow', get: function (y) { return y.spending; }, default: true });
   c({ id: 'contributions', label: 'Saved', group: 'Cash flow', kind: 'flow', get: function (y) { return y.contributions; }, default: true });
-  c({ id: 'rrspContribution', label: 'RRSP contrib.', group: 'Cash flow', kind: 'flow', get: function (y) { return y.rrspContribution; }, default: false });
+  c({ id: 'contribAccounts', label: 'Contributions by account', group: 'Cash flow', kind: 'flow', expand: 'contrib', default: false });
+  c({ id: 'roomAccounts', label: 'RRSP / TFSA room left', group: 'Cash flow', kind: 'flow', expand: 'room', default: false, title: 'Unused contribution room at year end' });
   c({ id: 'withdrawals', label: 'Withdrawn', group: 'Cash flow', kind: 'flow', get: function (y) { return y.withdrawals; }, default: true });
   c({ id: 'rrifMin', label: 'RRIF minimum', group: 'Cash flow', kind: 'flow', get: function (y) { return y.rrifMin; }, default: false });
   c({ id: 'unallocated', label: 'Unsaved surplus', group: 'Cash flow', kind: 'flow', get: function (y) { return y.unallocated; }, default: false, title: 'Cash left over in fixed / % savings modes (assumed spent)' });
@@ -44,7 +45,16 @@
     cols.list().forEach(function (col) {
       var isHidden = hidden.indexOf(col.id) >= 0 || (col.default === false && hidden.indexOf('+' + col.id) < 0);
       if (isHidden) return;
-      if (col.expand) {
+      if (col.expand === 'contrib') {
+        plan.accounts.forEach(function (a) {
+          out.push({ id: 'con_' + a.id, label: '→ ' + a.name, group: 'Cash flow', kind: 'flow', title: 'Contributed to ' + a.name, get: function (y) { return y.contribByAccount[a.id] || 0; } });
+        });
+      } else if (col.expand === 'room') {
+        plan.accounts.forEach(function (a) {
+          if (a.type !== 'rrsp' && a.type !== 'tfsa') return;
+          out.push({ id: 'room_' + a.id, label: a.name + ' room', group: 'Cash flow', kind: 'flow', title: 'Unused contribution room at year end', get: function (y) { return y.roomByAccount[a.id] || 0; } });
+        });
+      } else if (col.expand) {
         plan.accounts.forEach(function (a) {
           out.push({ id: 'bal_' + a.id, label: a.name, group: 'Portfolio', kind: 'balance', get: function (y) { return y.balances[a.id] || 0; } });
         });

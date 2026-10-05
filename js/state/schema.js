@@ -22,7 +22,7 @@
 
   var schema = RP.schema = {};
   schema.APP_ID = 'canadian-retirement-planner';
-  schema.SCHEMA_VERSION = 1;
+  schema.SCHEMA_VERSION = 2;
 
   schema.SCENARIO_COLORS = ['#e0812f', '#239c8f', '#8b5ca8', '#c2416f', '#c49a1c', '#3f8f3a', '#5a86cf'];
 
@@ -47,12 +47,12 @@
           { id: 'sp_travel', name: 'Travel', amount: 8000, phase: 'retired', indexed: true }
         ]
       },
-      savings: { mode: 'surplus', rate: 0.15, amount: 15000, order: ['rrsp', 'tfsa', 'cash', 'nonreg'] },
+      savings: { mode: 'surplus', rate: 0.15, amount: 15000, enforceRoom: true, order: ['rrsp', 'tfsa', 'cash', 'nonreg'] },
       accounts: [
-        { id: 'rrsp', name: 'RRSP / RRIF', type: 'rrsp', balance: 60000, contributionCap: 18000, returnRate: null },
-        { id: 'tfsa', name: 'TFSA', type: 'tfsa', balance: 40000, contributionCap: 7000, returnRate: null },
-        { id: 'cash', name: 'Cash / HISA', type: 'cash', balance: 10000, contributionCap: 0, returnRate: null },
-        { id: 'nonreg', name: 'Non-registered', type: 'nonreg', balance: 15000, costBase: 12000, contributionCap: null, returnRate: null }
+        { id: 'rrsp', name: 'RRSP / RRIF', type: 'rrsp', balance: 60000, contribLimit: 'legal', contributionCap: 18000, startingRoom: null, returnRate: null },
+        { id: 'tfsa', name: 'TFSA', type: 'tfsa', balance: 40000, contribLimit: 'legal', contributionCap: 7000, startingRoom: null, returnRate: null },
+        { id: 'cash', name: 'Cash / HISA', type: 'cash', balance: 10000, contribLimit: 'none', contributionCap: 0, returnRate: null },
+        { id: 'nonreg', name: 'Non-registered', type: 'nonreg', balance: 15000, costBase: 12000, contribLimit: 'unlimited', contributionCap: null, returnRate: null }
       ],
       assumptions: { inflation: 0.021, returnPre: 0.06, returnPost: 0.05, cashReturn: 0.025, volatility: 0.11 },
       benefits: { cppEnabled: true, cppAt65: 13000, cppStartAge: 65, oasEnabled: true, oasStartAge: 65, oasResidency: 1 },
@@ -92,8 +92,28 @@
 
   // Migration steps: migrations[n] upgrades a document from version n-1 to n.
   schema.migrations = {
-    1: function (doc) { return doc; }
+    1: function (doc) { return doc; },
+    // v2: accounts get an explicit contribution limit mode (previously implied by contributionCap).
+    2: function (doc) {
+      function upgrade(accounts) {
+        (accounts || []).forEach(function (a) {
+          if (a.contribLimit) return;
+          a.contribLimit = a.contributionCap === '' || a.contributionCap == null ? 'unlimited'
+            : Number(a.contributionCap) === 0 ? 'none' : 'custom';
+        });
+      }
+      if (doc.base) upgrade(doc.base.accounts);
+      (doc.scenarios || []).forEach(function (s) { if (s.overrides && s.overrides.accounts) upgrade(s.overrides.accounts); });
+      return doc;
+    }
   };
+
+  schema.CONTRIBUTION_LIMITS = [
+    { value: 'legal', label: 'Up to contribution room' },
+    { value: 'custom', label: "Up to a set amount (today's $)" },
+    { value: 'unlimited', label: 'No limit' },
+    { value: 'none', label: "Don't contribute" }
+  ];
 
   /** Bring any loaded document up to the current schema and fill defaults. */
   schema.normalize = function (raw) {
