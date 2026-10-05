@@ -52,6 +52,8 @@
       "mode": "total",
       "total": 44000,
       "retirementChange": -0.05,
+      "growthWorking": null,
+      "growthRetired": null,
       "items": [
         {
           "id": "sp_housing",

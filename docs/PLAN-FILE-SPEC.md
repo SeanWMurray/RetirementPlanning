@@ -127,6 +127,8 @@ You are generating a JSON plan file for a deterministic Canadian retirement proj
 | `mode` | `"total"` \| `"itemized"` | `"total"` | Use one total, or sum the `items`. |
 | `total` | number | 55000 | Annual spending in today's dollars (used when `mode` is `"total"`). Exclude savings, income tax and payroll deductions. |
 | `retirementChange` | rate | 0 | Change applied to base spending from retirement onward, e.g. `-0.2` = 20% less. |
+| `growthWorking` | rate or null | `null` | Yearly increase of base spending before retirement, **including inflation** (e.g. `0.03`). `null` = grow with inflation (constant lifestyle in today's dollars). |
+| `growthRetired` | rate or null | `null` | Yearly increase of base spending in retirement, including inflation. E.g. `0.01` with 2.1% inflation is a gradual real decline, common as retirees age. `null` = inflation. |
 | `items` | array | 7 sample lines | Used when `mode` is `"itemized"`. See below. |
 
 Spending item:
@@ -337,7 +339,7 @@ The planner checks every file it opens. Errors are shown with the field path. Ma
 - `app` is `"canadian-retirement-planner"` and `schemaVersion` is `2`.
 - Ages are integers, `16 ≤ currentAge ≤ 110`, `endAge > currentAge`, `cppStartAge` is 60–70 and `oasStartAge` is 65–70.
 - `province` is a valid two-letter code and `tax.year` is `"2026"`.
-- Every rate is a decimal in a sensible range (inflation −0.05–0.2; returns −0.5–0.3; `savings.rate`, `savings.rateMax`, `oasResidency` and `flatRate` 0–1; `savings.rateStep` −0.1–0.1; `savings.amountGrowth` −0.5–0.5; `withdrawalRate` 0–0.5). A value like `5` for 5% is an error.
+- Every rate is a decimal in a sensible range (inflation −0.05–0.2; `spending.growthWorking`/`growthRetired` −0.2–0.2; returns −0.5–0.3; `savings.rate`, `savings.rateMax`, `oasResidency` and `flatRate` 0–1; `savings.rateStep` −0.1–0.1; `savings.amountGrowth` −0.5–0.5; `withdrawalRate` 0–0.5). A value like `5` for 5% is an error.
 - Account ids are unique; `type` and `contribLimit` use the listed values; balances are ≥ 0; `contributionCap` is set when `contribLimit` is `"custom"`.
 - Every event has a valid `type` and all its required fields, `endAge ≥ startAge`, and ages within the plan. A `contribution` event's `accountId` must exist.
 - Scenario override paths exist in `base`, and the scenario's resulting plan also passes these checks. `disabledEvents` ids exist in `base.events`.
@@ -355,6 +357,7 @@ The planner checks every file it opens. Errors are shown with the field path. Ma
 | Children | `expense` with an age range (e.g. $15,000/yr for 18 years). RESP contributions can be an `expense` too. |
 | Post-secondary costs | `expense` over the study years. |
 | Car every N years | `expense` with `everyYears`. |
+| Spending that rises or falls over time | `spending.growthWorking` / `spending.growthRetired` (nominal, including inflation). For a one-off change at a certain age use an `adjustment` event instead. |
 | Travel early in retirement | `expense` from retirement for 10 years, or a `retired`-phase spending item. |
 | Part-time work / consulting in retirement | `income`, `taxType: "other"`. |
 | Rental property | `income` (net rental income, `taxType: "other"`). Model a later sale as a `lumpSum` (use `"other"` for the taxable portion if you want to approximate capital gains tax). |

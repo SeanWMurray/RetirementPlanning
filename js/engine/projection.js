@@ -68,6 +68,15 @@
     return year <= d.year ? base : Math.round(base * Math.pow(1 + inf, year - d.year) / 10) * 10;
   };
 
+  /**
+   * Yearly growth of base spending for a phase: spending.growthWorking / growthRetired (nominal,
+   * i.e. including inflation). Blank means "grow with inflation" (constant in today's dollars).
+   */
+  engine.spendingGrowth = function (S, retired, inf) {
+    var g = retired ? S.growthRetired : S.growthWorking;
+    return g == null || g === '' ? inf : num(g);
+  };
+
   /** Prior-year earned income used for the first year's RRSP room estimate. */
   function salary0Initial(plan) {
     return num(plan.income.salary) / (1 + num(plan.income.growth));
@@ -125,6 +134,7 @@
     var salary0 = num(plan.income.salary);
     var growth = num(plan.income.growth);
     var shocks = opts.returnShocks;
+    var spendIdx = 1;   // growth index for base spending (equals cpi unless spending growth is set)
 
     for (var age = startAge, t = 0; age <= endAge; age++, t++) {
       var year = startYear + t;
@@ -177,8 +187,9 @@
         }
       });
 
-      // 3. Spending
+      // 3. Spending — base amounts are today's dollars grown by the spending index for each year's phase.
       var S = plan.spending, base;
+      if (t > 0) spendIdx *= 1 + engine.spendingGrowth(S, retired, inf);
       if (S.mode === 'itemized') {
         base = 0;
         (S.items || []).forEach(function (it) {
@@ -188,10 +199,10 @@
           if (age < s0 || age > e0) return;
           if (it.phase === 'working' && retired) return;
           if (it.phase === 'retired' && !retired) return;
-          base += num(it.amount) * (it.indexed === false ? 1 : cpi);
+          base += num(it.amount) * (it.indexed === false ? 1 : spendIdx);
         });
       } else {
-        base = num(S.total) * cpi;
+        base = num(S.total) * spendIdx;
       }
       if (retired) base *= 1 + num(S.retirementChange);
       base = Math.max(0, (base + y.mods.spendingAdd) * y.mods.spending);

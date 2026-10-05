@@ -275,6 +275,31 @@ test('validator catches a savings increase written as a percentage', function ()
   ok(/savings\.amountGrowth/.test(msgs) && /savings\.rateStep/.test(msgs), msgs);
 });
 
+console.log('Spending growth');
+test('blank spending growth = inflation (unchanged behaviour)', function () {
+  var r = RP.engine.project(plan);
+  near(rowAt(r, 50).spending, 55000 * rowAt(r, 50).cpi, 1);
+});
+test('spending grows at the working rate, then the retirement rate', function () {
+  var p2 = RP.util.clone(plan); p2.spending.growthWorking = 0.04; p2.spending.growthRetired = 0.01;
+  var r = RP.engine.project(p2);
+  near(rowAt(r, 59).spending, 55000 * Math.pow(1.04, 24), 1);
+  near(rowAt(r, 70).spending, 55000 * Math.pow(1.04, 24) * Math.pow(1.01, 11), 1);
+});
+test('spending growth applies to indexed items only; retirement change still applies', function () {
+  var p2 = RP.util.clone(plan); p2.spending.mode = 'itemized'; p2.spending.growthWorking = 0.03; p2.spending.retirementChange = -0.1;
+  p2.spending.items = [{ id: 'a', name: 'Indexed', amount: 10000, phase: 'all', indexed: true }, { id: 'b', name: 'Fixed', amount: 5000, phase: 'all', indexed: false }];
+  var r = RP.engine.project(p2), inf = p2.assumptions.inflation;
+  near(rowAt(r, 45).spending, 10000 * Math.pow(1.03, 10) + 5000, 1);
+  near(rowAt(r, 61).spending, (10000 * Math.pow(1.03, 24) * Math.pow(1 + inf, 2) + 5000) * 0.9, 1);
+});
+test('validator catches spending growth written as a percentage', function () {
+  var n = RP.schema.normalize({ base: { spending: { growthRetired: -1 } } });
+  ok(RP.schema.validate(n).some(function (x) { return /growthRetired/.test(x.path); }), 'should flag -1 (−100%/yr)');
+  var n2 = RP.schema.normalize({ base: { spending: { growthWorking: 3 } } });
+  ok(RP.schema.validate(n2).some(function (x) { return /growthWorking.*percentage/.test(x.path + x.message); }));
+});
+
 console.log('Dollar adjustments');
 function adj(p, patch) { var e = RP.events.create('adjustment', patch.startAge, p); return Object.assign(e, patch); }
 test('permanent $ raise (doctor finishing residency) jumps and then grows with raises', function () {

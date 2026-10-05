@@ -36,7 +36,7 @@
         customCredit: 15000, indexBrackets: true, includePayroll: true, selfEmployed: false, oasClawback: true
       },
       spending: {
-        mode: 'total', total: 55000, retirementChange: 0,
+        mode: 'total', total: 55000, retirementChange: 0, growthWorking: null, growthRetired: null,
         items: [
           { id: 'sp_housing', name: 'Housing (rent/mortgage, tax, maintenance)', amount: 24000, phase: 'all', indexed: true },
           { id: 'sp_food', name: 'Groceries & dining', amount: 10000, phase: 'all', indexed: true },
@@ -201,7 +201,7 @@
   var RATES = [
     ['income.growth', -0.2, 0.3], ['assumptions.inflation', -0.05, 0.2], ['assumptions.returnPre', -0.5, 0.3],
     ['assumptions.returnPost', -0.5, 0.3], ['assumptions.cashReturn', -0.1, 0.2], ['assumptions.volatility', 0, 0.6],
-    ['spending.retirementChange', -1, 2], ['savings.rate', 0, 1], ['savings.rateStep', -0.1, 0.1], ['savings.rateMax', 0, 1], ['savings.amountGrowth', -0.5, 0.5], ['retirement.withdrawalRate', 0, 0.5],
+    ['spending.retirementChange', -1, 2], ['spending.growthWorking', -0.2, 0.2], ['spending.growthRetired', -0.2, 0.2], ['savings.rate', 0, 1], ['savings.rateStep', -0.1, 0.1], ['savings.rateMax', 0, 1], ['savings.amountGrowth', -0.5, 0.5], ['retirement.withdrawalRate', 0, 0.5],
     ['tax.flatRate', 0, 0.9], ['benefits.oasResidency', 0, 1]
   ];
 

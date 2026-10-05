@@ -12,6 +12,7 @@
   var store = function () { return RP.store; };
 
   function note(text) { return h('p.note', text); }
+  function signedPct(v) { v = num(v); return (v >= 0 ? '+' : '') + fmt.pct(v); }
 
   // ---------------------------------------------------------------------------
   sections.register({
@@ -48,7 +49,9 @@
         ? U.sum(p.spending.items.filter(function (i) { return i.enabled !== false && i.phase !== 'retired'; }), function (i) { return num(i.amount); })
         : num(p.spending.total);
       return fmt.money(total) + '/yr' + (p.spending.mode === 'itemized' ? ' (itemized)' : '') +
-        (num(p.spending.retirementChange) ? ' · ' + (p.spending.retirementChange > 0 ? '+' : '') + fmt.pct(p.spending.retirementChange, 0) + ' in retirement' : '');
+        (num(p.spending.retirementChange) ? ' · ' + (p.spending.retirementChange > 0 ? '+' : '') + fmt.pct(p.spending.retirementChange, 0) + ' in retirement' : '') +
+        (p.spending.growthWorking != null && p.spending.growthWorking !== '' ? ' · ' + signedPct(p.spending.growthWorking) + '/yr working' : '') +
+        (p.spending.growthRetired != null && p.spending.growthRetired !== '' ? ' · ' + signedPct(p.spending.growthRetired) + '/yr retired' : '');
     },
     render: function (p) {
       var wrap = h('div');
@@ -57,12 +60,40 @@
       else wrap.appendChild(ui.fields([{ path: 'spending.total', label: "Annual spending (today's $)", type: 'money', min: 0, wide: true }]));
       wrap.appendChild(ui.fields([
         { path: 'spending.retirementChange', label: 'Change at retirement', type: 'percent', wide: true,
-          help: 'Applied to base spending from retirement on. E.g. −20% if the mortgage is paid off and work costs end.' }
+          help: 'Applied to base spending from retirement on. E.g. −20% if the mortgage is paid off and work costs end.' },
+        { path: 'spending.growthWorking', label: 'Annual increase while working', type: 'percent', nullable: true, placeholder: 'inflation',
+          help: 'How much spending rises each year before retirement, including inflation. E.g. 3% with 2.1% inflation ≈ 0.9%/yr lifestyle creep. Blank = grows with inflation (same lifestyle in today’s dollars).' },
+        { path: 'spending.growthRetired', label: 'Annual increase in retirement', type: 'percent', nullable: true, placeholder: 'inflation',
+          help: 'How much spending rises each year in retirement, including inflation. Many retirees spend less as they age, e.g. 1% with 2.1% inflation ≈ 1.1%/yr real decline. Blank = grows with inflation.' }
       ]));
-      wrap.appendChild(note("All amounts are in today's dollars and grow with inflation. Add one-off or temporary costs as events (click any row in the table)."));
+      wrap.appendChild(h('p.note.spending-preview', spendingPreview(p) || ''));
+      wrap.appendChild(note("Amounts are entered in today's dollars. Add one-off or temporary costs as events (click any row in the table)."));
       return wrap;
     }
   });
+
+  /** "Now → at retirement → later" preview of base spending, future $ with today's $ in brackets. */
+  function spendingPreview(p) {
+    var S = p.spending, inf = num(p.assumptions.inflation);
+    var a0 = Math.round(num(p.profile.currentAge)), ret = Math.round(num(p.profile.retirementAge)), end = Math.round(num(p.profile.endAge));
+    function baseFor(retired) {
+      if (S.mode !== 'itemized') return num(S.total);
+      return U.sum((S.items || []).filter(function (i) {
+        return i.enabled !== false && (i.phase === 'all' || !i.phase || i.phase === (retired ? 'retired' : 'working'));
+      }), function (i) { return num(i.amount); });
+    }
+    var ages = [a0, ret, Math.min(end, Math.max(ret + 15, 85))].filter(function (a, i, arr) { return a >= a0 && a <= end && arr.indexOf(a) === i; });
+    var idx = 1, cpi = 1, out = [];
+    for (var age = a0; age <= end; age++) {
+      var retired = age >= ret;
+      if (age > a0) { idx *= 1 + RP.engine.spendingGrowth(S, retired, inf); cpi *= 1 + inf; }
+      if (ages.indexOf(age) >= 0) {
+        var v = baseFor(retired) * idx * (retired ? 1 + num(S.retirementChange) : 1);
+        out.push((age === a0 ? 'now' : 'age ' + age) + ' ' + fmt.money(v) + (age === a0 ? '' : ' (' + fmt.money(v / cpi) + ' today)'));
+      }
+    }
+    return 'Base spending: ' + out.join(' → ') + '.';
+  }
 
   function itemsEditor(p) {
     var items = p.spending.items || [];
@@ -384,6 +415,8 @@
     var plan = store().effective();
     var pv = host.querySelector('.savings-preview');
     if (pv) pv.textContent = savingsPreview(plan) || '';
+    var sp = host.querySelector('.spending-preview');
+    if (sp) sp.textContent = spendingPreview(plan) || '';
     host.querySelectorAll('details.section').forEach(function (det, i) {
       var sec = sections.list()[i];
       var el = det.querySelector('.section-summary');
