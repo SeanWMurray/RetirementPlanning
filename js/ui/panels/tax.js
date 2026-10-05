@@ -11,6 +11,64 @@
     return h('tr' + (opts.total ? '.total' : '') + (opts.sub ? '.sub' : ''), h('td.left', label), h('td', opts.pct ? fmt.pct(v) : fmt.money(v)));
   }
 
+  /**
+   * "Where the money came from": the year's cash sources by tax treatment, against its uses.
+   * Explains why tax can be low (TFSA, return of capital, half-taxable gains, credits) or why a
+   * year shows spending but little tax (a shortfall: the spending was not actually funded).
+   */
+  function moneyFlow(y, plan) {
+    var acctName = {}, acctType = {};
+    plan.accounts.forEach(function (a) { acctName[a.id] = a.name; acctType[a.id] = a.type; });
+    var taxable = 0, partly = 0, free = 0;
+    var src = [];
+    function add(label, amt, treat, note) {
+      if (!(amt > 0.5)) return;
+      src.push({ label: label, amt: amt, treat: treat, note: note });
+      if (treat === 'taxable') taxable += amt; else if (treat === 'partly') partly += amt; else free += amt;
+    }
+    add('Employment income', y.employment, 'taxable');
+    add('CPP / QPP', y.cpp, 'taxable');
+    add('OAS', y.oas, 'taxable');
+    (y.extraIncome || []).forEach(function (x) { add(x.label, x.amount, x.taxType === 'nontaxable' ? 'free' : 'taxable'); });
+    Object.keys(y.withdrawByAccount || {}).forEach(function (id) {
+      var w = y.withdrawByAccount[id];
+      var t = acctType[id];
+      if (t === 'rrsp') add('Withdrawal: ' + acctName[id], w, 'taxable', 'fully taxable');
+      else if (t === 'nonreg') {
+        var gain = y.taxInputs.capitalGains * 2;
+        add('Withdrawal: ' + acctName[id], w, 'partly', fmt.money(gain) + ' is capital gain, of which half (' + fmt.money(y.taxInputs.capitalGains) + ') is taxable; the rest is your own cost base returned');
+      }
+      else add('Withdrawal: ' + acctName[id], w, 'free', t === 'tfsa' ? 'tax-free' : 'your own money (interest is taxed as it is earned)');
+    });
+    var total = taxable + partly + free;
+    var badge = { taxable: 'Taxable', partly: 'Partly taxable', free: 'Tax-free' };
+    var rows = src.map(function (s) {
+      return h('tr', h('td.left', s.label, s.note ? h('div.muted', s.note) : null), h('td.left', badge[s.treat]), h('td', fmt.money(s.amt)),
+        h('td', total > 0 ? fmt.pct(s.amt / total, 0) : '—'));
+    });
+    var uses = [
+      ['Spending', y.spending], ['Tax and contributions', y.tax], ['Saved / reinvested', y.contributions], ['Unsaved surplus (assumed spent)', y.unallocated]
+    ].filter(function (u) { return u[1] > 0.5; });
+    var why = [];
+    if (y.shortfall > 1) why.push(h('b.neg', 'Spending of ' + fmt.money(y.spending) + ' was not fully funded: ' + fmt.money(y.shortfall) + ' is a shortfall (the accounts ran out). Tax is only on the income that actually came in.'));
+    if (total > 0 && free / total > 0.3) why.push(fmt.pct(free / total, 0) + ' of this year’s cash came from tax-free sources (TFSA, cash, non-taxable income).');
+    if (partly > 0.5) why.push('Non-registered withdrawals are taxed only on the gain portion, and only half of a capital gain is taxable.');
+    if (y.taxDetail.taxableIncome < 60000 && y.taxDetail.taxableIncome > 0) why.push('Taxable income is ' + fmt.money(y.taxDetail.taxableIncome) + ', and the basic personal' + (y.age >= 65 ? ', age and pension' : '') + ' amounts shelter the first part of it.');
+    return h('section.card',
+      h('div.card-head', h('div', h('h3', 'Where the money came from — age ' + y.age), h('p.card-sub', 'Nominal dollars of ' + y.year + '. Explains why tax is high or low this year.'))),
+      h('div.two-col.tight',
+        h('table.grid.compact.flow',
+          h('thead', h('tr', h('th.left', 'Source'), h('th.left', 'Tax treatment'), h('th', 'Amount'), h('th', 'Share'))),
+          h('tbody', rows.length ? rows : h('tr', h('td.left', { colSpan: 4 }, 'No cash came in this year.')),
+            h('tr.total', h('td.left', 'Total cash in'), h('td.left', fmt.money(taxable) + ' taxable · ' + fmt.money(partly) + ' partly · ' + fmt.money(free) + ' tax-free'), h('td', fmt.money(total)), h('td', '')))),
+        h('div',
+          h('table.grid.compact.statement', h('tbody',
+            uses.map(function (u) { return h('tr', h('td.left', u[0]), h('td', fmt.money(u[1]))); }),
+            y.shortfall > 1 ? h('tr', h('td.left.neg', 'Shortfall (unfunded spending)'), h('td.neg', fmt.money(y.shortfall))) : null,
+            h('tr.total', h('td.left', 'Tax as % of spending'), h('td', y.spending > 0 ? fmt.pct(y.tax / y.spending) : '—')))),
+          why.length ? h('ul.flow-why', why.map(function (w) { return h('li', w); })) : null)));
+  }
+
   RP.tabs.register({
     id: 'tax', label: 'Tax',
     render: function (host, args) {
@@ -51,6 +109,8 @@
         line('Average rate (of total income)', d.averageRate, { pct: true }),
         line('Marginal rate (next $ of ordinary income)', marginal, { pct: true })
       ];
+
+      host.appendChild(moneyFlow(y, plan));
 
       var canvas = h('canvas', { role: 'img', 'aria-label': 'Tax by year chart' });
       host.appendChild(h('div.two-col',
