@@ -151,6 +151,10 @@
             placeholder: a.type === 'tfsa' ? "this year's limit" : 'estimate',
             help: a.type === 'tfsa' ? 'Your TFSA contribution room on January 1 (CRA My Account). Blank = only this year’s new limit.' : 'From your latest Notice of Assessment (“RRSP deduction limit”). Blank = estimate 18% of last year’s salary.' } : null,
           a.type === 'nonreg' ? { path: base + 'costBase', label: 'Adjusted cost base', type: 'money', min: 0, help: 'Used to work out the taxable capital gain on withdrawals.' } : null,
+          a.type === 'nonreg' ? { path: base + 'distYield', label: 'Taxable distributions (% /yr)', type: 'percent', min: 0, max: 0.2, nullable: true, placeholder: 'none',
+            help: 'Dividends, interest and fund distributions paid each year as a % of the balance, taxed in the year received and reinvested (raising the cost base). They are part of the return, not extra to it. Typical: 1.5–3% for a balanced or dividend portfolio; ~0.5–1% for low-yield equity ETFs.' } : null,
+          a.type === 'nonreg' && num(a.distYield) > 0 ? { path: base + 'distType', label: 'Distribution type', type: 'select', options: RP.schema.DIST_TYPES,
+            help: 'Eligible dividends get the gross-up and dividend tax credit (often lightly taxed at low incomes); interest is fully taxable; capital-gain distributions are 50% taxable.' } : null,
           { path: base + 'returnRate', label: 'Return override', type: 'percent', nullable: true, placeholder: 'plan default', help: 'Leave blank to use the plan’s return assumptions.' }
         ];
         wrap.appendChild(h('div.account-card',
@@ -165,7 +169,7 @@
       });
       wrap.appendChild(ui.button('Add account', function () {
         var arr = U.clone(store().get('accounts'));
-        arr.push({ id: U.uid('acct'), name: 'New account', type: 'nonreg', balance: 0, costBase: 0, contribLimit: 'unlimited', contributionCap: null, returnRate: null });
+        arr.push({ id: U.uid('acct'), name: 'New account', type: 'nonreg', balance: 0, costBase: 0, distYield: 0.02, distType: 'mix', contribLimit: 'unlimited', contributionCap: null, returnRate: null });
         store().set('accounts', arr, { structural: true });
       }, { icon: 'plus', cls: 'ghost small' }));
       return wrap;

@@ -52,7 +52,7 @@
         { id: 'rrsp', name: 'RRSP / RRIF', type: 'rrsp', balance: 60000, contribLimit: 'legal', contributionCap: 18000, startingRoom: null, returnRate: null },
         { id: 'tfsa', name: 'TFSA', type: 'tfsa', balance: 40000, contribLimit: 'legal', contributionCap: 7000, startingRoom: null, returnRate: null },
         { id: 'cash', name: 'Cash / HISA', type: 'cash', balance: 10000, contribLimit: 'none', contributionCap: 0, returnRate: null },
-        { id: 'nonreg', name: 'Non-registered', type: 'nonreg', balance: 15000, costBase: 12000, contribLimit: 'unlimited', contributionCap: null, returnRate: null }
+        { id: 'nonreg', name: 'Non-registered', type: 'nonreg', balance: 15000, costBase: 12000, distYield: 0.02, distType: 'mix', contribLimit: 'unlimited', contributionCap: null, returnRate: null }
       ],
       assumptions: { inflation: 0.021, returnPre: 0.06, returnPost: 0.05, cashReturn: 0.025, volatility: 0.11 },
       benefits: { cppEnabled: true, cppAt65: 13000, cppStartAge: 65, oasEnabled: true, oasStartAge: 65, oasResidency: 1 },
@@ -170,6 +170,13 @@
     return doc;
   };
 
+  schema.DIST_TYPES = [
+    { value: 'mix', label: 'Balanced mix (⅓ each)' },
+    { value: 'dividends', label: 'Canadian eligible dividends' },
+    { value: 'interest', label: 'Interest / foreign income' },
+    { value: 'gains', label: 'Capital-gain distributions' }
+  ];
+
   schema.ACCOUNT_TYPES = [
     { value: 'rrsp', label: 'RRSP / RRIF / LIRA (tax-deferred)' },
     { value: 'tfsa', label: 'TFSA (tax-free)' },
@@ -193,7 +200,8 @@
     'adjustment.target': ['income', 'spending', 'savings'],
     'adjustment.kind': ['step', 'growth'],
     'returnOverride.mode': ['set', 'add'],
-    'contribution.mode': ['custom', 'legal', 'none']
+    'contribution.mode': ['custom', 'legal', 'none'],
+    'account.distType': ['mix', 'dividends', 'interest', 'gains']
   };
   schema.ENUMS = ENUMS;
 
@@ -267,6 +275,12 @@
         if (a.contribLimit === 'custom' && !isNum(a.contributionCap)) err(ap + '.contributionCap', 'is required when contribLimit is "custom"');
         if (a.contribLimit === 'legal' && a.type !== 'rrsp' && a.type !== 'tfsa') warn(ap + '.contribLimit', '"legal" only tracks room for rrsp/tfsa; for ' + a.type + ' it means no limit');
         if (a.returnRate != null && isNum(a.returnRate) && a.returnRate > 0.5 && a.returnRate <= 100) err(ap + '.returnRate', 'looks like a percentage; use a decimal, e.g. 0.05');
+        if (a.distYield != null) {
+          if (!isNum(a.distYield)) err(ap + '.distYield', 'must be a number');
+          else if (a.distYield > 0.2 && a.distYield <= 100) err(ap + '.distYield', 'looks like a percentage; use a decimal, e.g. 0.02 for 2%');
+          else if (a.distYield < 0) err(ap + '.distYield', 'must be ≥ 0');
+        }
+        if (a.distType != null) oneOf(ap + '.distType', a.distType, ENUMS['account.distType']);
         if (a.type === 'nonreg' && a.costBase != null && isNum(a.costBase) && isNum(a.balance) && a.costBase > a.balance * 3) warn(ap + '.costBase', 'is much larger than the balance; check it is the adjusted cost base');
       });
       if (!(p.accounts || []).length) warn(prefix + 'accounts', 'no accounts: savings have nowhere to go');

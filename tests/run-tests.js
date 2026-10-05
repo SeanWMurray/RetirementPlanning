@@ -393,6 +393,38 @@ test('fixed-in-law credits are not indexed (federal and most provincial pension 
   near(t2.provincialCredits - t1.provincialCredits, (d.provinces.BC.bpa.max + RP.tax.ageAmount(70, d.provinces.BC.age, 3000, 1, 70)) * 0.5, 1);
 });
 
+console.log('Non-registered distributions');
+test('eligible dividends: gross-up and dividend tax credits ($50k in Ontario ≈ no federal tax)', function () {
+  var r = RP.tax.compute({ dividends: 50000 }, ctx('ON', 40, { includePayroll: false }));
+  near(r.taxableIncome, 69000, 0.5, 'grossed up 38%');
+  near(r.federal, 0, 0.5);
+  ok(r.provincial < 1500, 'ON tax ' + r.provincial);
+  var interest = RP.tax.compute({ other: 50000 }, ctx('ON', 40, { includePayroll: false }));
+  ok(interest.total > r.total + 5000, 'interest is taxed far more than dividends');
+});
+test('distributions are taxed yearly, reinvested, and raise the cost base', function () {
+  function only(yieldPct, type) {
+    var p = RP.util.clone(plan);
+    Object.assign(p.profile, { currentAge: 65, retirementAge: 65 });
+    p.income.salary = 0; p.benefits.cppEnabled = false; p.benefits.oasEnabled = false; p.spending.total = 60000;
+    p.accounts = [{ id: 'nr', name: 'NR', type: 'nonreg', balance: 2000000, costBase: 500000, distYield: yieldPct, distType: type, contribLimit: 'unlimited' }];
+    p.savings.order = ['nr']; p.retirement.withdrawalOrder = ['nr'];
+    return RP.engine.project(p);
+  }
+  var none = only(0, 'mix'), inter = only(0.03, 'interest'), div = only(0.03, 'dividends');
+  near(inter.years[0].distributions, 60000, 0.5);
+  ok(inter.years[0].tax > none.years[0].tax + 10000, 'interest distributions add tax: ' + inter.years[0].tax + ' vs ' + none.years[0].tax);
+  ok(div.years[0].tax < inter.years[0].tax, 'dividends taxed less than interest');
+  // Cost base rises by reinvested distributions, so later withdrawals realize a smaller share of gain.
+  ok(inter.years[10].realizedGains / inter.years[10].withdrawByAccount.nr < none.years[10].realizedGains / none.years[10].withdrawByAccount.nr);
+  near(inter.years[0].total, none.years[0].total - (inter.years[0].withdrawals - none.years[0].withdrawals) * (1 + 0.05), 1, 'distributions are part of the return, not extra');
+});
+test('validator flags a distribution yield written as a percentage', function () {
+  var n = RP.schema.normalize({ base: { accounts: [{ id: 'n', type: 'nonreg', balance: 1, distYield: 2, distType: 'weird' }] } });
+  var paths = RP.schema.validate(n).map(function (x) { return x.path; }).join(' ');
+  ok(/distYield/.test(paths) && /distType/.test(paths), paths);
+});
+
 console.log('Review fixes (regressions)');
 test('OAS stays inflation-indexed when tax brackets are not', function () {
   var p2 = RP.util.clone(plan); p2.tax.indexBrackets = false; p2.profile.currentAge = 64; p2.profile.retirementAge = 64;
@@ -434,7 +466,8 @@ test('fuzz: 150 random plans keep cash balanced, balances ≥ 0 and room rules',
     var a0 = Math.round(between(25, 75));
     Object.assign(p.profile, { currentAge: a0, retirementAge: Math.round(between(a0 - 5, 72)), endAge: Math.round(between(Math.max(a0 + 5, 85), 100)), province: pick(provs) });
     p.income.salary = between(0, 350000); p.spending.total = between(20000, 180000); p.spending.retirementChange = between(-0.3, 0.2);
-    p.accounts.forEach(function (a) { a.balance = between(0, 800000); a.contribLimit = pick(['legal', 'custom', 'unlimited', 'none']); a.contributionCap = between(0, 30000); a.startingRoom = rand() < 0.5 ? null : between(0, 100000); });
+    p.accounts.forEach(function (a) { a.balance = between(0, 800000); a.contribLimit = pick(['legal', 'custom', 'unlimited', 'none']); a.contributionCap = between(0, 30000); a.startingRoom = rand() < 0.5 ? null : between(0, 100000);
+      if (a.type === 'nonreg') { a.distYield = rand() < 0.3 ? 0 : between(0, 0.05); a.distType = pick(['mix', 'dividends', 'interest', 'gains']); a.costBase = a.balance * between(0.2, 1.2); } });
     p.savings.mode = pick(['surplus', 'percentGross', 'fixed']);
     p.retirement.strategy = pick(['needs', 'fixedReal', 'percentBalance']);
     p.tax.mode = pick(['calculated', 'calculated', 'flat', 'custom']); p.tax.selfEmployed = rand() < 0.2;

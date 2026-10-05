@@ -35,8 +35,8 @@
       var t = acctType[id];
       if (t === 'rrsp') add('Withdrawal: ' + acctName[id], w, 'taxable', 'fully taxable');
       else if (t === 'nonreg') {
-        var gain = y.taxInputs.capitalGains * 2;
-        add('Withdrawal: ' + acctName[id], w, 'partly', fmt.money(gain) + ' is capital gain, of which half (' + fmt.money(y.taxInputs.capitalGains) + ') is taxable; the rest is your own cost base returned');
+        var realized = y.realizedGains || 0;
+        add('Withdrawal: ' + acctName[id], w, 'partly', fmt.money(realized * 2) + ' is capital gain, of which half (' + fmt.money(realized) + ') is taxable; the rest is your own cost base returned');
       }
       else add('Withdrawal: ' + acctName[id], w, 'free', t === 'tfsa' ? 'tax-free' : 'your own money (interest is taxed as it is earned)');
     });
@@ -53,6 +53,7 @@
     if (y.shortfall > 1) why.push(h('b.neg', 'Spending of ' + fmt.money(y.spending) + ' was not fully funded: ' + fmt.money(y.shortfall) + ' is a shortfall (the accounts ran out). Tax is only on the income that actually came in.'));
     if (total > 0 && free / total > 0.3) why.push(fmt.pct(free / total, 0) + ' of this year’s cash came from tax-free sources (TFSA, cash, non-taxable income).');
     if (partly > 0.5) why.push('Non-registered withdrawals are taxed only on the gain portion, and only half of a capital gain is taxable.');
+    if (y.distributions > 0.5) why.push('Tax also includes ' + fmt.money(y.distributions) + ' of reinvested non-registered distributions (dividends, interest, fund distributions), taxed this year even though no cash was withdrawn.');
     if (y.taxDetail.taxableIncome < 60000 && y.taxDetail.taxableIncome > 0) why.push('Taxable income is ' + fmt.money(y.taxDetail.taxableIncome) + ', and the basic personal' + (y.age >= 65 ? ', age and pension' : '') + ' amounts shelter the first part of it.');
     return h('section.card',
       h('div.card-head', h('div', h('h3', 'Where the money came from — age ' + y.age), h('p.card-sub', 'Nominal dollars of ' + y.year + '. Explains why tax is high or low this year.'))),
@@ -89,9 +90,10 @@
         inp.cpp ? line('CPP / QPP', inp.cpp) : null,
         inp.oas ? line('OAS', inp.oas) : null,
         inp.pension ? line('Pension income (events)', inp.pension) : null,
-        inp.other ? line('Other taxable income (events, interest)', inp.other) : null,
+        inp.other ? line('Other taxable income (events, interest, distributions)', inp.other) : null,
         inp.rrif ? line('RRSP / RRIF withdrawals', inp.rrif) : null,
         inp.capitalGains ? line('Taxable capital gains', inp.capitalGains) : null,
+        inp.dividends ? line('Eligible dividends (grossed up 38%)', inp.dividends * 1.38) : null,
         line('Total income', d.grossIncome, { total: true }),
         inp.rrspDeduction ? line('RRSP deduction', -inp.rrspDeduction, { sub: true }) : null,
         d.payroll.deduction ? line('CPP enhanced deduction', -d.payroll.deduction, { sub: true }) : null,
@@ -149,7 +151,7 @@
         h('p.note', 'Basic personal amount: federal ' + fmt.money(data.federal.bpa.max) + ', ' + prov.name + ' ' + fmt.money(prov.bpa.max) +
           '. Future years index these by the plan’s inflation rate' + (prov.indexed === false ? ' (' + prov.name + ' brackets are frozen)' : '') + '.'),
         verify.length ? h('div.callout', ui.icon('info'), h('span', 'Estimated values to verify: ' + verify.join(', ') + '. To correct them, edit js/data/tax-' + data.year + '.js.')) : null,
-        h('p.note', 'Not modelled: pension income splitting, dividend tax credit, provincial low-income reductions (e.g. Ontario Tax Reduction), refundable credits, AMT and capital losses. Use a flat or custom rate if you need to approximate these.')));
+        h('p.note', 'Not modelled: pension income splitting, non-eligible dividends, provincial low-income reductions (e.g. Ontario Tax Reduction), refundable credits, AMT and capital losses. Use a flat or custom rate if you need to approximate these.')));
     }
   });
 })(globalThis.RP);

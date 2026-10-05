@@ -46,6 +46,14 @@
     return 1 / (90 - age);
   }
 
+  /** How each non-registered distribution type splits between interest, eligible dividends and capital gains. */
+  var DIST_MIX = engine.DIST_MIX = {
+    mix: { interest: 1 / 3, dividends: 1 / 3, gains: 1 / 3 },
+    dividends: { interest: 0, dividends: 1, gains: 0 },
+    interest: { interest: 1, dividends: 0, gains: 0 },
+    gains: { interest: 0, dividends: 0, gains: 1 }
+  };
+
   /** Contribution limit mode for an account (older plans only had a numeric cap). */
   engine.limitMode = function (a) {
     if (a.contribLimit) return a.contribLimit;
@@ -109,6 +117,8 @@
         cap: a.contributionCap === '' || a.contributionCap == null ? null : num(a.contributionCap),
         limitMode: engine.limitMode(a),
         startingRoom: a.startingRoom === '' || a.startingRoom == null ? null : Math.max(0, num(a.startingRoom)),
+        distYield: a.type === 'nonreg' ? Math.max(0, num(a.distYield, 0)) : 0,
+        distType: a.distType || 'mix', dist: 0,
         room: null, wPrev: 0
       };
     });
@@ -233,6 +243,16 @@
       var interest = 0;
       accts.forEach(function (a) { if (a.type === 'cash' && a.r > 0) interest += a.start * a.r; });
 
+      // Non-registered distributions (dividends, interest, capital-gain distributions) are part of the
+      // account's total return, taxed in the year received and reinvested (which adds to the cost base).
+      var distInterest = 0, distDividends = 0, distGains = 0;
+      accts.forEach(function (a) {
+        a.dist = a.distYield > 0 ? a.start * a.distYield : 0;
+        if (!a.dist) return;
+        var mix = DIST_MIX[a.distType] || DIST_MIX.mix;
+        distInterest += a.dist * mix.interest; distDividends += a.dist * mix.dividends; distGains += a.dist * mix.gains;
+      });
+
       // RRIF minimum
       var rrifMin = 0;
       if (plan.retirement.rrifMinimums !== false && age >= 72) {
@@ -246,15 +266,16 @@
 
       var taxCtx = { age: age, province: prof.province, data: d, index: taxIdx, settings: plan.tax };
       var inc0 = {
-        employment: y.employment, other: exOther + interest, pension: exPension,
-        cpp: y.cpp, oas: y.oas, rrif: rrifMin, capitalGains: 0, rrspDeduction: 0
+        employment: y.employment, other: exOther + interest + distInterest, pension: exPension,
+        cpp: y.cpp, oas: y.oas, rrif: rrifMin, capitalGains: distGains * cgInc, dividends: distDividends, rrspDeduction: 0
       };
       var cashIn = y.employment + y.cpp + y.oas + exOther + exPension + exNonTax + rrifMin;
 
       function taxWith(extra) {
         var inc = {
           employment: inc0.employment, other: inc0.other, pension: inc0.pension, cpp: inc0.cpp, oas: inc0.oas,
-          rrif: inc0.rrif + (extra.rrif || 0), capitalGains: extra.capitalGains || 0, rrspDeduction: extra.rrspDeduction || 0
+          rrif: inc0.rrif + (extra.rrif || 0), capitalGains: inc0.capitalGains + (extra.capitalGains || 0),
+          dividends: inc0.dividends, rrspDeduction: extra.rrspDeduction || 0
         };
         return RP.tax.compute(inc, taxCtx);
       }
@@ -399,7 +420,7 @@
         var w = a.w + (wd.map[a.id] || 0);
         var c = contrib.map[a.id] || 0;
         if (a.type === 'nonreg' && a.start > 0 && w > 0) a.acb -= a.acb * Math.min(1, w / a.start);
-        if (a.type === 'nonreg') a.acb += c;
+        if (a.type === 'nonreg') a.acb += c + a.dist;   // reinvested distributions were already taxed
         var after = Math.max(0, a.start - w);
         // Each year's flows are stated at start-of-year prices (cpi). A contribution invested mid-year
         // therefore carries half a year of inflation as well as half a year of compound growth;
@@ -430,8 +451,9 @@
         extraIncome: y.extraIncome, extraExpenses: y.extraExpenses,
         tax: taxRes.totalWithPayroll, incomeTax: taxRes.incomeTax, payroll: taxRes.payroll.total,
         oasClawback: taxRes.oasClawback, taxDetail: taxRes,
-        taxInputs: { employment: y.employment, other: exOther + interest, pension: exPension, cpp: y.cpp, oas: y.oas,
-          rrif: rrifMin + wd.rrif, capitalGains: wd.capitalGains, rrspDeduction: contrib.rrsp },
+        taxInputs: { employment: y.employment, other: exOther + interest + distInterest, pension: exPension, cpp: y.cpp, oas: y.oas,
+          rrif: rrifMin + wd.rrif, capitalGains: inc0.capitalGains + wd.capitalGains, dividends: distDividends, rrspDeduction: contrib.rrsp },
+        distributions: distInterest + distDividends + distGains, realizedGains: wd.capitalGains,
         taxCtx: taxCtx,
         contributions: C, contribByAccount: contribs, roomByAccount: room, rrspContribution: contrib.rrsp,
         withdrawals: totalW, withdrawByAccount: withdrawals, rrifMin: rrifMin,

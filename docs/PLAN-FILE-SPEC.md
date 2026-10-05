@@ -155,6 +155,8 @@ One-off or temporary costs (a car, a wedding, kids) are better modelled as **eve
 | `type` | enum | `"rrsp"`: RRSP/RRIF/LIRA/spousal RRSP (tax-deductible contributions, fully taxable withdrawals, RRIF minimums from 72). `"tfsa"`: tax-free. `"nonreg"`: non-registered (growth taxed as capital gains on withdrawal, 50% inclusion). `"cash"`: savings/HISA/GIC (interest taxed every year). |
 | `balance` | number ≥ 0 | Current balance. |
 | `costBase` | number | `nonreg` only: adjusted cost base (ACB). Default = balance. |
+| `distYield` | rate | `nonreg` only: taxable distributions per year as a share of the balance (dividends, interest, fund distributions), e.g. `0.02`. Part of the account's return (not extra), taxed in the year received, reinvested, and added to the ACB. Default `0` if omitted; `0.015`–`0.03` is typical for balanced or dividend portfolios. |
+| `distType` | enum | `nonreg` only: `"mix"` (⅓ each, default), `"dividends"` (Canadian eligible dividends: gross-up and dividend tax credit), `"interest"` (fully taxable; also use for foreign dividends), `"gains"` (capital-gain distributions, 50% taxable). |
 | `contribLimit` | enum | How much of each year's savings this account can take: `"legal"` = up to available contribution room (RRSP/TFSA only; tracked automatically), `"custom"` = up to `contributionCap` per year, `"unlimited"` = no limit, `"none"` = never contribute. |
 | `contributionCap` | number or null | Annual amount in today's dollars, used when `contribLimit` is `"custom"`. |
 | `startingRoom` | number or null | `rrsp`/`tfsa` only. TFSA: unused contribution room on January 1 of `startYear` (CRA My Account). RRSP: "RRSP deduction limit" from the latest Notice of Assessment. `null` = estimate (TFSA: this year's limit only; RRSP: 18% of last year's salary). |
@@ -382,9 +384,9 @@ The planner checks every file it opens. Errors are shown with the field path. Ma
 ## Part 9: Limitations (tell the user when relevant)
 
 - One person only: no spousal pension splitting, survivor benefits or spousal RRSP attribution.
-- Non-registered growth is treated as deferred capital gains. Dividends and annual distributions aren't modelled separately.
+- Non-registered growth beyond the distribution yield is treated as deferred capital gains. Foreign dividends should be entered as `interest`. Return of capital isn't modelled.
 - RRSP room ignores pension adjustments. The RRSP maximum is indexed with inflation.
-- Not modelled: the dividend tax credit, AMT, provincial low-income reductions, refundable credits, capital losses, the Home Buyers' Plan, LIRA unlocking rules, GIS.
+- Not modelled: non-eligible dividends, AMT, provincial low-income reductions, refundable credits, capital losses, the Home Buyers' Plan, LIRA unlocking rules, GIS.
 - CPP is the user's estimate at 65, indexed with inflation, not computed from their contribution history.
 - Some 2026 credit amounts are estimates (see the planner's Tax tab).
 

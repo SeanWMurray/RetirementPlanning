@@ -10,6 +10,7 @@
  *     rrif,            // RRSP/RRIF withdrawals (pension-credit eligible at 65+)
  *     cpp, oas,        // government benefits (gross)
  *     capitalGains,    // TAXABLE portion of capital gains (already multiplied by inclusion rate)
+ *     dividends,       // eligible Canadian dividends received (actual cash; grossed up here)
  *     rrspDeduction    // RRSP contributions deducted this year
  *   }
  *   ctx = {
@@ -146,10 +147,13 @@
 
     var employment = num(inc.employment), other = num(inc.other), pension = num(inc.pension),
         rrif = num(inc.rrif), cpp = num(inc.cpp), oas = num(inc.oas),
-        cg = num(inc.capitalGains), rrspDed = num(inc.rrspDeduction);
+        cg = num(inc.capitalGains), rrspDed = num(inc.rrspDeduction), div = num(inc.dividends);
+    // Eligible dividends are grossed up into income (calculated mode) and earn the dividend tax credit.
+    var divDef = d.federal.eligibleDividend || { grossUp: 0.38, credit: 0.150198 };
+    var grossedDiv = (s.mode || 'calculated') === 'calculated' ? div * (1 + divDef.grossUp) : div;
 
     var payroll = tax.payroll(employment, ctx);
-    var gross = employment + other + pension + rrif + cpp + oas + cg;
+    var gross = employment + other + pension + rrif + cpp + oas + cg + grossedDiv;
     var netIncome = Math.max(0, gross - rrspDed - payroll.deduction);
 
     var clawback = 0;
@@ -184,7 +188,9 @@
         Math.min(employment, f.canadaEmployment.amount * idx) +
         payroll.baseCredit + payroll.ei + payroll.qpip;
       var fGross = tax.bracketTax(taxable, f.brackets, idx);
-      var fed = Math.max(0, fGross - fCredits * f.creditRate);
+      var fDtc = grossedDiv * divDef.credit;
+      var fed = Math.max(0, fGross - fCredits * f.creditRate - fDtc);
+      if (fDtc) st.lines.push({ label: 'Federal dividend tax credit', amount: -Math.min(fDtc, Math.max(0, fGross - fCredits * f.creditRate)) });
       if (prov.federalAbatement) {
         var abate = fed * f.quebecAbatement;
         st.lines.push({ label: 'Quebec abatement', amount: -abate });
@@ -201,7 +207,10 @@
         tax.ageAmount(ctx.age, prov.age, netIncome, pIdx, ctx.age) +
         provPension +
         payroll.baseCredit + payroll.ei + payroll.qpip;
-      st.provincial = Math.max(0, tax.bracketTax(taxable, prov.brackets, pIdx) - pCredits * pRate);
+      var pBasic = tax.bracketTax(taxable, prov.brackets, pIdx) - pCredits * pRate;
+      var pDtc = grossedDiv * num(prov.dividendCredit, 0);
+      st.provincial = Math.max(0, pBasic - pDtc);
+      if (pDtc) st.lines.push({ label: 'Provincial dividend tax credit', amount: -Math.min(pDtc, Math.max(0, pBasic)) });
       st.provincialCredits = pCredits;
 
       (prov.rules || []).forEach(function (rid) {

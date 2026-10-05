@@ -33,7 +33,7 @@
         h('ul',
           h('li', 'Single person. Spousal planning (pension splitting, survivor benefits, spousal RRSPs) is not modelled yet.'),
           h('li', 'RRSP/TFSA room is tracked, but RRSP room uses employment income only (no pension adjustment for workplace pension members) and the RRSP maximum is indexed with inflation. No Home Buyers’ Plan, LIRA unlocking rules or annuity products.'),
-          h('li', 'Non-registered income is simplified (no dividends or annual distributions). Use a lower return or a flat tax rate if you want to approximate tax drag.'),
+          h('li', 'Non-registered accounts pay a yearly taxable distribution (a % of the start-of-year balance) that is reinvested and added to the cost base. Eligible Canadian dividends get the 38% gross-up and federal and provincial dividend tax credits; interest is fully taxable; capital-gain distributions are 50% taxable. Only eligible dividends are modelled (no non-eligible dividends or return-of-capital distributions).'),
           h('li', 'CPP is indexed with inflation from today rather than modelled from your contribution history. Use your Service Canada estimate for the amount at 65.'),
           h('li', 'Some 2026 credit amounts are estimates; see the Tax tab for which ones to verify.'))),
         h('section.card.prose', h('div.card-head', h('h3', 'Privacy & saving')),
