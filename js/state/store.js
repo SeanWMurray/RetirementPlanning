@@ -282,13 +282,30 @@
     return JSON.stringify(doc, null, 2);
   };
 
-  store.importJson = function (text) {
-    var doc = RP.schema.normalize(JSON.parse(text));
+  /** Parse and check a plan file without loading it. Returns { doc, issues } or throws on unreadable files. */
+  store.parsePlan = function (text) {
+    var raw;
+    try { raw = JSON.parse(text); }
+    catch (e) {
+      // Tolerate a file that is a Markdown code block (common when copied from an AI chat).
+      var m = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
+      if (!m) throw new Error('Not valid JSON: ' + e.message);
+      raw = JSON.parse(m[1]);
+    }
+    var doc = RP.schema.normalize(raw);
+    return { doc: doc, issues: RP.schema.validate(doc) };
+  };
+
+  store.loadDocument = function (doc) {
     snapshot();
     store.doc = doc;
     store.active = 'base';
     changed(true);
     return doc;
+  };
+
+  store.importJson = function (text) {
+    return store.loadDocument(store.parsePlan(text).doc);
   };
 
   store.reset = function () {

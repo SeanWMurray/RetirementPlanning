@@ -57,6 +57,17 @@ Six ready-made plans with scenarios ship with the app. Open them with **File ›
 
 See [examples/README.md](examples/README.md) for each plan's story and results.
 
+## Build your plan with an AI assistant
+
+[`docs/PLAN-FILE-SPEC.md`](docs/PLAN-FILE-SPEC.md) is a complete specification of the plan file format, written for AI assistants.
+
+1. **Upload it.** Download the file and upload it to ChatGPT, Claude, Gemini or similar, together with the suggested prompt at the top of the spec.
+2. **Answer its questions.** The assistant interviews you about your situation and replies with a plan file that includes scenarios.
+3. **Load the plan.** In the planner choose **File › Paste Plan…** and paste the reply. You can also save the reply as `.json` and use **File › Open Plan…**.
+4. **Fix any problems.** Every opened file is validated: rates written as percentages, unknown fields or account ids, impossible ages and so on. If problems are found, **Copy list**, paste it back to the assistant, and ask for a corrected file.
+
+The spec's two example plans are checked by the test suite, so the documentation can't drift from the code.
+
 ## Running it
 
 **Locally:** download or zip this folder and double-click `index.html`. You don't need to run any commands.
@@ -92,6 +103,7 @@ js/ui/                     interface (plain DOM + Chart.js)
 tests/run-tests.js         engine tests: `node tests/run-tests.js`
 docs/screenshots/          images used in this README (regenerate: node tools/screenshots.js)
 examples/                  example plan files (generated: node tools/build-examples.js)
+docs/PLAN-FILE-SPEC.md     plan file format specification (also for AI assistants)
 js/data/examples.js        the same examples bundled for File › Open Example (generated)
 ```
 
@@ -115,7 +127,7 @@ Nearly everything is a **registry**. Adding a feature usually means registering 
 | A section in the input panel | `RP.inputSections` | `js/ui/inputs.js` |
 | A whole new tab | `RP.tabs` | new file in `js/ui/panels/` + a `<script>` tag |
 
-**New plan inputs:** add the field with a default in `schema.defaultBase()`. Old saved plans automatically get the default when loaded, because loading deep-merges defaults underneath the file. If you ever need to rename or restructure stored data, bump `SCHEMA_VERSION` and add a step to `schema.migrations`.
+**New plan inputs:** add the field with a default in `schema.defaultBase()`, document it in `docs/PLAN-FILE-SPEC.md`, and add any checks to `schema.validate()`. Old saved plans automatically get the default when loaded, because loading deep-merges defaults underneath the file. If you ever need to rename or restructure stored data, bump `SCHEMA_VERSION` and add a step to `schema.migrations`.
 
 **New tax year:** copy `js/data/tax-2026.js` to `tax-2027.js`, update the numbers, and add a `<script>` tag. It then appears in the "Tax table year" picker. Values marked `verify: true` are estimates and are listed in the Tax tab.
 

@@ -46,6 +46,7 @@
     return [
       { label: 'New Plan', onclick: newPlan },
       { label: 'Open Plan…', hint: 'Ctrl+O', onclick: importPlan },
+      { label: 'Paste Plan…', onclick: pastePlan },
       { label: 'Open Example…', disabled: !(RP.examples && RP.examples.length), onclick: openExample },
       { label: 'Save Plan As…', hint: 'Ctrl+S', onclick: exportPlan },
       { separator: true },
@@ -128,6 +129,7 @@
   M.register({ id: 'help', label: 'Help', items: function () {
     return [
       { label: 'Methodology & Limitations', onclick: function () { app.showTab('about'); } },
+      { label: 'Plan File Specification (for AI)…', onclick: showSpec },
       { label: 'Keyboard Shortcuts', onclick: showShortcuts },
       { separator: true },
       { label: 'About Retirement Planner', onclick: showAbout }
@@ -423,11 +425,59 @@
     app.status('Plan saved to ' + ui.slug(RP.store.doc.meta.name) + '.retirement-plan.json');
   }
   function importPlan() {
-    ui.pickFile('.json,application/json', function (text, file) { loadText(text, file.name); });
+    ui.pickFile('.json,.txt,.md,application/json,text/plain,text/markdown', function (text, file) { loadText(text, file.name); });
   }
   function loadText(text, name) {
-    try { RP.store.importJson(text); app.status('Opened ' + name); }
-    catch (e) { app.status('Could not open ' + name + ': ' + e.message, 'error'); ui.modal('Open plan', h('p', 'Could not open ' + name + ': ' + e.message), [{ label: 'OK', primary: true, onclick: function () {} }]); }
+    var parsed;
+    try { parsed = RP.store.parsePlan(text); }
+    catch (e) {
+      app.status('Could not open ' + name + ': ' + e.message, 'error');
+      ui.modal('Open plan', h('p', 'Could not open ' + name + ': ' + e.message), [{ label: 'OK', primary: true, onclick: function () {} }]);
+      return;
+    }
+    var errors = parsed.issues.filter(function (x) { return x.level === 'error'; });
+    function open() {
+      RP.store.loadDocument(parsed.doc);
+      app.status('Opened ' + name + (parsed.issues.length ? ' (' + parsed.issues.length + ' issue' + (parsed.issues.length > 1 ? 's' : '') + ')' : ''));
+    }
+    if (!parsed.issues.length) { open(); return; }
+    var list = h('div.table-wrap', h('table.grid.compact.issues',
+      h('thead', h('tr', h('th.left', ''), h('th.left', 'Field'), h('th.left', 'Problem'))),
+      h('tbody', parsed.issues.map(function (x) {
+        return h('tr', h('td.left' + (x.level === 'error' ? '.neg' : ''), x.level === 'error' ? 'Error' : 'Warning'), h('td.left', h('code', x.path)), h('td.left', x.message));
+      }))));
+    if (errors.length) {
+      ui.modal('Problems in ' + name, h('div',
+        h('p', errors.length + ' error(s) found. The plan may calculate incorrectly. If an AI assistant wrote this file, paste this list back to it and ask for a corrected file.'),
+        list), [
+        { label: 'Copy list', onclick: function () { copyIssues(parsed.issues); return false; } },
+        { label: 'Cancel', onclick: function () {} },
+        { label: 'Open anyway', primary: true, onclick: open }
+      ], { wide: true });
+    } else {
+      open();
+      ui.modal('Opened with warnings', h('div', h('p', name + ' was opened. Please review:'), list), [{ label: 'OK', primary: true, onclick: function () {} }], { wide: true });
+    }
+  }
+  /** Paste plan JSON (e.g. an AI assistant's reply; surrounding text and ``` fences are fine). */
+  function pastePlan() {
+    var ta = h('textarea.input.mono', { rows: 16, placeholder: 'Paste the plan here — the whole AI reply is fine, as long as it contains the JSON.' });
+    ui.modal('Paste Plan', h('div',
+      h('p.note', 'For plans written by an AI assistant from the plan file specification (Help › Plan File Specification). The current plan is replaced; Edit › Undo brings it back.'),
+      ta), [
+      { label: 'Cancel', onclick: function () {} },
+      { label: 'Open', primary: true, onclick: function () {
+        var t = ta.value.trim();
+        if (!t) return false;
+        var start = t.indexOf('{'), end = t.lastIndexOf('}');
+        if (!/```/.test(t) && start > 0 && end > start) t = t.slice(start, end + 1);
+        setTimeout(function () { loadText(t, 'pasted plan'); }, 0);
+      } }
+    ], { wide: true });
+  }
+  function copyIssues(issues) {
+    var text = issues.map(function (x) { return x.level.toUpperCase() + ' ' + x.path + ': ' + x.message; }).join('\n');
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { app.status('Problem list copied'); }, function () { app.status('Could not copy'); });
   }
   function printPlan() {
     if (RP.store.doc.settings.activeTab !== 'projection') app.showTab('projection');
@@ -439,6 +489,17 @@
       { label: 'Cancel', onclick: function () {} },
       { label: 'OK', primary: true, onclick: function () { RP.store.update(function () { sc.name = inp.value || sc.name; }); } }
     ]);
+  }
+  function showSpec() {
+    ui.modal('Plan File Specification', h('div.prose',
+      h('p', 'The plan file format is documented in ', h('code', 'docs/PLAN-FILE-SPEC.md'), '. You can give that file to an AI assistant (ChatGPT, Claude, Gemini, …) and ask it to build a plan for your situation:'),
+      h('ol',
+        h('li', h('a', { href: 'docs/PLAN-FILE-SPEC.md', download: 'PLAN-FILE-SPEC.md' }, 'Download the specification'), ' (or get it from the project’s GitHub page).'),
+        h('li', 'Upload it to the AI and describe your situation. It will ask follow-up questions, then reply with a plan in JSON.'),
+        h('li', 'Use File › Paste Plan… and paste the reply, or save it as a .json file and use File › Open Plan….'),
+        h('li', 'If the planner reports problems, copy the list back to the AI and ask for a corrected file.')),
+      h('p.note', 'Avoid sharing details you consider private (names, account numbers, SIN). The planner itself never sends your data anywhere, but an AI service will receive whatever you type.')),
+      [{ label: 'OK', primary: true, onclick: function () {} }]);
   }
   function showShortcuts() {
     var rows = [['Ctrl+S', 'Save plan to file'], ['Ctrl+O', 'Open plan file'], ['Ctrl+P', 'Print'], ['Ctrl+Z', 'Undo'], ['Ctrl+Y / Ctrl+Shift+Z', 'Redo'],

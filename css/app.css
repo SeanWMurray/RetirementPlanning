@@ -361,6 +361,10 @@ table.grid { border-collapse: separate; border-spacing: 0; width: 100%; font-var
 .scenario-head .btn-row { flex-wrap: nowrap; gap: 1px; }
 .scenario-card > p.muted { padding: 5px 8px; }
 .scenario-notes { padding: 4px 8px 0; color: var(--text-2); font-style: italic; }
+.grid.issues td { white-space: normal; height: auto; padding: 3px 6px; vertical-align: top; }
+.grid.issues td:first-child { white-space: nowrap; }
+textarea.mono, code { font-family: Consolas, "SF Mono", Menlo, monospace; font-size: 11.5px; }
+.modal .prose a { color: var(--accent); }
 .example-list .grid td { height: auto; padding: 5px 6px; white-space: normal; vertical-align: top; }
 .example-list .grid td.left b { display: block; }
 .override-list { list-style: none; margin: 0; padding: 2px 6px 4px; }

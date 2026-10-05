@@ -258,5 +258,36 @@ test('every example plan loads and projects', function () {
   });
 });
 
+console.log('Plan file specification');
+test('examples in docs/PLAN-FILE-SPEC.md import with no errors or warnings', function () {
+  var md = fs.readFileSync(path.join(root, 'docs', 'PLAN-FILE-SPEC.md'), 'utf8');
+  var blocks = [], re = /```json\n([\s\S]*?)```/g, m;
+  while ((m = re.exec(md))) if (m[1].indexOf('"schemaVersion"') >= 0) blocks.push(m[1]);
+  ok(blocks.length >= 2, 'expected the minimal and complete examples, found ' + blocks.length);
+  blocks.forEach(function (b, i) {
+    var raw = JSON.parse(b);
+    ok(raw.schemaVersion === RP.schema.SCHEMA_VERSION, 'spec example ' + i + ' must use the current schema version');
+    var doc = RP.schema.normalize(raw);
+    var issues = RP.schema.validate(doc);
+    ok(!issues.length, 'spec example ' + i + ': ' + issues.map(function (x) { return x.path + ' ' + x.message; }).join('; '));
+    RP.scenarios.runAll(doc).forEach(function (r) { ok(r.result.years.length > 0); });
+  });
+});
+test('validator flags common AI mistakes', function () {
+  var doc = RP.schema.normalize({ base: { profile: { currentAge: 40, endAge: 95, retirementAge: 60, province: 'ON', startYear: 2026 },
+    assumptions: { inflation: 2 }, accounts: [{ id: 'a', type: 'rrsp', balance: 1 }],
+    events: [{ type: 'adjustment', target: 'spending', kind: 'step', pct: -20, startAge: 60, endAge: 70 }, { type: 'contribution', accountId: 'zzz', mode: 'none', startAge: 50, endAge: 55 }] },
+    scenarios: [{ name: 'x', overrides: { 'accounts.0.balance': 5, 'profile.retireAge': 1 } }] });
+  var msgs = RP.schema.validate(doc).map(function (x) { return x.path + ' ' + x.message; }).join('\n');
+  ['assumptions.inflation looks like a percentage', 'pct looks like a percentage', 'unknown account id "zzz"', 'points inside an array', 'unknown path "profile.retireAge"']
+    .forEach(function (frag) { ok(msgs.indexOf(frag) >= 0, 'missing: ' + frag + '\n' + msgs); });
+});
+test('parsePlan accepts JSON wrapped in an AI reply', function () {
+  vm.runInThisContext(fs.readFileSync(path.join(root, 'js/state/store.js'), 'utf8'));
+  var reply = 'Here is your plan:\n```json\n' + JSON.stringify(RP.schema.newDocument('From AI')) + '\n```\nLet me know!';
+  var r = RP.store.parsePlan(reply);
+  ok(r.doc.meta.name === 'From AI' && r.issues.length === 0);
+});
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);
