@@ -240,7 +240,10 @@
           "label": "Mortgage + condo fees vs rent",
           "target": "spending",
           "kind": "step",
+          "unit": "percent",
           "pct": 0.15,
+          "amount": 10000,
+          "indexed": true,
           "startAge": 35,
           "endAge": 59
         },
@@ -285,7 +288,10 @@
           "label": "Promotion track",
           "target": "income",
           "kind": "growth",
+          "unit": "percent",
           "pct": 0.02,
+          "amount": 10000,
+          "indexed": true,
           "startAge": 30,
           "endAge": 40
         }

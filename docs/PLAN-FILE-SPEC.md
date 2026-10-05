@@ -264,14 +264,19 @@ Ranges are inclusive. If `endAge` is omitted or equals `startAge`, the event las
 
 Surplus cash is invested following `savings.order` (excluding the RRSP once retired).
 
-**`adjustment`**: percentage change to a baseline.
+**`adjustment`**: change a baseline by a percentage or a dollar amount.
 
 | Field | Type | Description |
 |---|---|---|
-| `target` | enum | `"income"` (salary), `"spending"` (base spending) or `"savings"` (the `percentGross`/`fixed` savings target). |
-| `kind` | enum | `"step"` = multiply by (1 + `pct`) only during the range; `-1` means zero (a sabbatical). `"growth"` = extra compounding of `pct` per year during the range, with the higher level persisting afterwards (a promotion track). |
-| `pct` | rate | For example `-0.2` or `0.02`. |
+| `target` | enum | `"income"` (salary), `"spending"` (base spending) or `"savings"` (the `percentGross`/`fixed` savings target; no effect in `surplus` mode). |
+| `kind` | enum | `"step"` = **temporary**: applies only during the range. `"growth"` = **permanent**: applied for each year of the range and kept afterwards. |
+| `unit` | enum | `"percent"` (default) or `"dollars"`. |
+| `pct` | rate | When `unit` is `"percent"`. `step`: the baseline × (1 + `pct`) during the range (`-1` = zero, a sabbatical). `growth`: an extra `pct` raise compounding each year of the range (a promotion track). |
+| `amount` | number | When `unit` is `"dollars"`, per year, negative to reduce. `step`: added each year of the range only (e.g. `-24000` spending after the mortgage is paid off). `growth`: added once for each year of the range and kept afterwards, then growing with `income.growth` (income) or inflation (spending/savings). Use `startAge` = `endAge` for a one-time permanent raise (e.g. `+250000` when a doctor finishes residency). |
+| `indexed` | boolean | When `unit` is `"dollars"`: `true` (default) = today's dollars. |
 | `startAge`, `endAge` | integer | Range. |
+
+Dollar adjustments are added to the baseline first, and percentage adjustments then scale the result, so a later −100% sabbatical still zeroes a raised salary.
 
 **`returnOverride`**: force market returns for certain years. This doesn't affect `cash` accounts.
 
@@ -345,7 +350,6 @@ The planner checks every file it opens. Errors are shown with the field path. Ma
 | Situation | How to model it |
 |---|---|
 | Defined-benefit pension | `income` event, `taxType: "pension"`, from pension start to `endAge`. Add a second event for a bridge benefit ending at 64. Set the RRSP to `contribLimit: "custom"` with a small amount, because pension adjustments reduce RRSP room. |
-| Mortgage paid off | `adjustment` event on `spending`, `kind: "step"`, negative `pct` from the payoff age to `endAge`. Or keep the mortgage out of `spending.total` and add an `expense` event for the payments until payoff. |
 | Buying a home | `expense` for the down payment and closing costs at the purchase age, plus a `spending` `adjustment` for the change in housing costs. |
 | Selling or downsizing a home | `lumpSum`, `taxType: "nontaxable"` (principal residence), net of costs. |
 | Children | `expense` with an age range (e.g. $15,000/yr for 18 years). RESP contributions can be an `expense` too. |
@@ -357,6 +361,8 @@ The planner checks every file it opens. Errors are shown with the field path. Ma
 | Inheritance | `lumpSum`, `taxType: "nontaxable"`. |
 | Sabbatical / parental leave | `adjustment` on `income`, `kind: "step"`, `pct: -1` (or a partial value), plus an `income` event for EI/top-up if relevant. |
 | Career growth spurt | `adjustment` on `income`, `kind: "growth"`, e.g. `pct: 0.02` for ages 30–40. |
+| Known big raise (residency → staff physician, partnership, promotion) | `adjustment` on `income`, `kind: "growth"`, `unit: "dollars"`, `amount` = the raise, `startAge` = `endAge` = the age it starts. |
+| Mortgage paid off | `adjustment` on `spending`, `kind: "step"`, `unit: "dollars"`, `amount` = −annual payments, from the payoff age to `endAge`. Or keep the mortgage out of `spending.total` and add an `expense` event for the payments until payoff. |
 | Max out the TFSA for a decade | `contribution` event, `mode: "legal"`, on the TFSA account. |
 | Stop RRSP contributions at 55 | `contribution` event, `mode: "none"`, on the RRSP account, from 55 to `endAge`. |
 | Already retired | `salary: 0`, `retirementAge` ≤ `currentAge`, `cppStartAge`/`oasStartAge` = the ages they started, RRSP account holds the RRIF balance with `contribLimit: "none"`. |

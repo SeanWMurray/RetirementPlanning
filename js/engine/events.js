@@ -19,6 +19,7 @@
  *
  * The year object `y` passed to apply() exposes these hooks:
  *   y.mods.income / y.mods.spending / y.mods.savings   multiplicative factors (default 1)
+ *   y.mods.incomeAdd / spendingAdd / savingsAdd        dollar amounts added to the baseline (default 0)
  *   y.mods.returnOverride  (number|null)  replaces the portfolio return this year
  *   y.mods.returnDelta     (number)       added to the portfolio return this year
  *   y.mods.contrib[accountId] = { mode: 'custom'|'legal'|'none', amount }  overrides an account's contribution limit
@@ -153,40 +154,69 @@
     { value: 'spending', label: 'Base spending' },
     { value: 'savings', label: 'Savings contributions' }
   ];
+  var UNITS = [{ value: 'percent', label: 'Percent (%)' }, { value: 'dollars', label: 'Dollars ($)' }];
+  function isDollars(ev) { return ev.unit === 'dollars'; }
   types.register({
     id: 'adjustment',
-    label: 'Adjust income / spending / savings',
-    description: 'Change a baseline by a percentage — either a temporary step (e.g. sabbatical −50%) or extra annual growth that compounds (e.g. promotion track +2%/yr).',
+    label: 'Income / spending / savings adjustment',
+    description: 'Change a baseline by a percentage or a dollar amount — temporarily (only during the ages chosen, e.g. sabbatical −100%, mortgage paid off −$24,000) or permanently (a raise that stays, e.g. +$150,000 when a doctor finishes residency, or +2%/yr extra growth on a promotion track).',
     color: 'var(--ev-adjust)',
     fields: [
       { key: 'label', label: 'Name', type: 'text' },
       { key: 'target', label: 'Applies to', type: 'select', options: TARGETS },
       { key: 'kind', label: 'Kind', type: 'select', options: [
-        { value: 'step', label: 'Step change during range (temporary)' },
-        { value: 'growth', label: 'Extra annual growth during range (permanent)' }
+        { value: 'step', label: 'Temporary — only during the ages chosen' },
+        { value: 'growth', label: 'Permanent — a raise/cut that stays afterwards' }
       ] },
-      { key: 'pct', label: 'Percent', type: 'percent', help: 'Negative to reduce. Step: −20% = 80% of baseline. Growth: +2% = compounding 2%/yr on top of normal growth.' },
+      { key: 'unit', label: 'Amount in', type: 'select', options: UNITS },
+      { key: 'pct', label: 'Percent', type: 'percent', showIf: function (e) { return !isDollars(e); },
+        help: 'Negative to reduce. Temporary: −20% = 80% of normal during the range. Permanent: +2% = an extra 2% raise every year of the range, kept afterwards.' },
+      { key: 'amount', label: 'Dollars per year', type: 'money', showIf: isDollars,
+        help: 'Negative to reduce. Temporary: added every year of the range only. Permanent: added once for each year of the range and kept afterwards, growing with your normal raises (income) or inflation (spending/savings). Use the same From and To age for a one-time raise.' },
+      { key: 'indexed', label: "In today's dollars (inflation-indexed)", type: 'toggle', showIf: isDollars },
       rangeFields[0], rangeFields[1]
     ],
     defaults: function (age, plan) {
-      return { label: 'Adjustment', target: 'spending', kind: 'step', pct: -0.1, startAge: age, endAge: plan ? plan.profile.endAge : age + 10 };
+      return { label: 'Adjustment', target: 'spending', kind: 'step', unit: 'percent', pct: -0.1, amount: 10000, indexed: true, startAge: age, endAge: plan ? plan.profile.endAge : age + 10 };
     },
     presets: [
+      { label: 'Big raise ($, permanent)', values: { label: 'Big raise', target: 'income', kind: 'growth', unit: 'dollars', amount: 150000, endAgeOffset: 0 } },
       { label: 'Sabbatical (no income 1 yr)', values: { label: 'Sabbatical', target: 'income', kind: 'step', pct: -1, endAgeOffset: 0 } },
       { label: 'Go part-time (−40% income)', values: { label: 'Part-time', target: 'income', kind: 'step', pct: -0.4, endAgeOffset: 4 } },
       { label: 'Promotion track (+2%/yr)', values: { label: 'Promotion track', target: 'income', kind: 'growth', pct: 0.02, endAgeOffset: 4 } },
+      { label: 'Mortgage paid off (−$ spending)', values: { label: 'Mortgage paid off', target: 'spending', kind: 'step', unit: 'dollars', amount: -24000, endAgeOffsetToEnd: true } },
       { label: 'Slow-go years (−20% spend)', values: { label: 'Slow-go years', target: 'spending', kind: 'step', pct: -0.2, endAgeOffsetToEnd: true } },
       { label: 'Boost savings (+25%)', values: { label: 'Boost savings', target: 'savings', kind: 'step', pct: 0.25, endAgeOffset: 4 } }
     ],
     isActive: function (ev, age) { return inRange(ev, age); },
     summary: function (ev) {
       var t = (TARGETS.filter(function (x) { return x.value === ev.target; })[0] || {}).label || ev.target;
+      var oneYear = ev.endAge == null || ev.endAge === '' || num(ev.endAge) === num(ev.startAge);
+      if (isDollars(ev)) {
+        var a = num(ev.amount), d = (a >= 0 ? '+' : '−') + fmt.money(Math.abs(a)).replace('−', '');
+        if (ev.kind === 'growth') return t + ' ' + d + (oneYear ? ' from age ' + num(ev.startAge) + ' (permanent)' : ' per year of ' + ageRangeText(ev) + ' (permanent)');
+        return t + ' ' + d + '/yr, ' + ageRangeText(ev);
+      }
       var p = (num(ev.pct) >= 0 ? '+' : '') + fmt.pct(num(ev.pct), 1);
       return t + ' ' + p + (ev.kind === 'growth' ? '/yr' : '') + ', ' + ageRangeText(ev);
     },
     apply: function (ev, y, ctx) {
-      var key = ev.target in y.mods ? ev.target : 'spending';
+      var key = ev.target === 'income' || ev.target === 'savings' ? ev.target : 'spending';
       var p = ctx.persist;
+      if (isDollars(ev)) {
+        // Dollar adjustments add to the baseline (before percentage adjustments are applied).
+        var amt = num(ev.amount) * (ev.indexed === false ? 1 : ctx.cpi);
+        if (ev.kind === 'growth') {
+          // A permanent raise/cut: keeps growing like the baseline it is part of.
+          var rate = key === 'income' ? num(ctx.plan.income.growth) : num(ctx.plan.assumptions.inflation);
+          p.level = p.level == null ? 0 : p.level * (1 + rate);
+          if (inRange(ev, ctx.age)) p.level += amt;
+          y.mods[key + 'Add'] += p.level;
+        } else if (inRange(ev, ctx.age)) {
+          y.mods[key + 'Add'] += amt;
+        }
+        return;
+      }
       if (ev.kind === 'growth') {
         if (p.factor == null) p.factor = 1;
         if (inRange(ev, ctx.age)) p.factor *= 1 + num(ev.pct);

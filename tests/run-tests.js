@@ -275,6 +275,48 @@ test('validator catches a savings increase written as a percentage', function ()
   ok(/savings\.amountGrowth/.test(msgs) && /savings\.rateStep/.test(msgs), msgs);
 });
 
+console.log('Dollar adjustments');
+function adj(p, patch) { var e = RP.events.create('adjustment', patch.startAge, p); return Object.assign(e, patch); }
+test('permanent $ raise (doctor finishing residency) jumps and then grows with raises', function () {
+  var p2 = RP.util.clone(plan); p2.profile.currentAge = 30; p2.income.salary = 75000; p2.income.growth = 0.03;
+  p2.events = [adj(p2, { target: 'income', kind: 'growth', unit: 'dollars', amount: 250000, indexed: false, startAge: 33, endAge: 33 })];
+  var r = RP.engine.project(p2);
+  near(rowAt(r, 32).employment, 75000 * Math.pow(1.03, 2), 1);
+  near(rowAt(r, 33).employment, 75000 * Math.pow(1.03, 3) + 250000, 1);
+  near(rowAt(r, 40).employment, 75000 * Math.pow(1.03, 10) + 250000 * Math.pow(1.03, 7), 1);
+  near(rowAt(r, 60).employment, 0, 0.01, 'still stops at retirement');
+});
+test('$ raise each year of a range accumulates', function () {
+  var p2 = RP.util.clone(plan); p2.income.growth = 0;
+  p2.events = [adj(p2, { target: 'income', kind: 'growth', unit: 'dollars', amount: 10000, indexed: false, startAge: 40, endAge: 42 })];
+  var r = RP.engine.project(p2);
+  near(rowAt(r, 42).employment - rowAt(r, 39).employment, 30000, 1);
+  near(rowAt(r, 50).employment - rowAt(r, 39).employment, 30000, 1);
+});
+test('temporary $ spending cut applies only during the range (today\'s dollars)', function () {
+  var p2 = RP.util.clone(plan), base = RP.engine.project(p2);
+  p2.events = [adj(p2, { target: 'spending', kind: 'step', unit: 'dollars', amount: -24000, startAge: 56, endAge: 70 })];
+  var r = RP.engine.project(p2);
+  near(rowAt(base, 60).spending - rowAt(r, 60).spending, 24000 * rowAt(r, 60).cpi, 1);
+  near(rowAt(base, 71).spending - rowAt(r, 71).spending, 0, 0.01);
+});
+test('a percentage sabbatical also removes a dollar raise that year', function () {
+  var p2 = RP.util.clone(plan);
+  p2.events = [adj(p2, { target: 'income', kind: 'growth', unit: 'dollars', amount: 100000, startAge: 40, endAge: 40 }),
+               adj(p2, { target: 'income', kind: 'step', unit: 'percent', pct: -1, startAge: 45, endAge: 45 })];
+  var r = RP.engine.project(p2);
+  near(rowAt(r, 45).employment, 0, 0.01);
+  ok(rowAt(r, 46).employment > 200000);
+});
+test('dollar adjustments: required fields, summary and backwards compatibility', function () {
+  var n = RP.schema.normalize({ base: { events: [{ id: 'old', type: 'adjustment', target: 'spending', kind: 'step', pct: -0.1, startAge: 40, endAge: 50 },
+    { id: 'd', type: 'adjustment', target: 'income', kind: 'growth', unit: 'dollars', startAge: 40 }] } });
+  ok(n.base.events[0].unit === 'percent', 'old events default to percent');
+  var issues = RP.schema.validate(n).map(function (x) { return x.path; }).join(' ');
+  ok(/events\.1\.amount/.test(issues) && !/events\.1\.pct/.test(issues), issues);
+  ok(/permanent/.test(RP.events.describe({ type: 'adjustment', target: 'income', kind: 'growth', unit: 'dollars', amount: 150000, startAge: 33, endAge: 33 })));
+});
+
 console.log('Review fixes (regressions)');
 test('OAS stays inflation-indexed when tax brackets are not', function () {
   var p2 = RP.util.clone(plan); p2.tax.indexBrackets = false; p2.profile.currentAge = 64; p2.profile.retirementAge = 64;
@@ -324,6 +366,7 @@ test('fuzz: 150 random plans keep cash balanced, balances ≥ 0 and room rules',
       var t = pick(RP.eventTypes.ids()), e = RP.events.create(t, Math.round(between(a0, p.profile.endAge)), p);
       if (e.amount != null) e.amount = between(1000, 300000);
       if (t === 'contribution') e.accountId = pick(p.accounts).id;
+      if (t === 'adjustment') { e.target = pick(['income', 'spending', 'savings']); e.kind = pick(['step', 'growth']); e.unit = pick(['percent', 'dollars']); e.amount = between(-150000, 300000); e.pct = between(-1, 0.3); }
       p.events.push(e);
     }
     RP.engine.project(p).years.forEach(function (y) {

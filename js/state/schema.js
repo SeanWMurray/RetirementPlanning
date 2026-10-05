@@ -121,7 +121,7 @@
    * taxType is non-taxable). Only presentation/treatment fields are filled; amounts, ages and
    * modes must be explicit (the validator reports them).
    */
-  var SAFE_EVENT_DEFAULTS = ['indexed', 'everyYears', 'taxType'];
+  var SAFE_EVENT_DEFAULTS = ['indexed', 'everyYears', 'taxType', 'unit'];
   function fillEventDefaults(e) {
     if (e.enabled == null) e.enabled = true;
     var def = RP.eventTypes && RP.eventTypes.get(e.type);
@@ -291,7 +291,7 @@
         def.fields.forEach(function (f) {
           var v = e[f.key];
           if (f.key === 'label') return;
-          var optional = f.key === 'endAge' || f.key === 'everyYears' || f.key === 'indexed' ||
+          var optional = f.key === 'endAge' || f.key === 'everyYears' || f.key === 'indexed' || (f.showIf && !f.showIf(e)) ||
             (e.type === 'contribution' && f.key === 'amount' && e.mode !== 'custom');
           if (v == null || v === '') { if (!optional) err(ep + '.' + f.key, 'is required for ' + e.type + ' events'); return; }
           if (f.type === 'select' && !(typeof f.options === 'function')) oneOf(ep + '.' + f.key, v, f.options.map(function (o) { return o.value; }));

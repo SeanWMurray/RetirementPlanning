@@ -196,7 +196,10 @@
         "label": "Slow years",
         "target": "income",
         "kind": "step",
+        "unit": "percent",
         "pct": -0.3,
+        "amount": 10000,
+        "indexed": true,
         "startAge": 48,
         "endAge": 49
       }
@@ -241,7 +244,10 @@
           "label": "Sabbatical",
           "target": "income",
           "kind": "step",
+          "unit": "percent",
           "pct": -1,
+          "amount": 10000,
+          "indexed": true,
           "startAge": 50,
           "endAge": 50
         },

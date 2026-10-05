@@ -134,7 +134,7 @@
 
       var y = {
         t: t, age: age, year: year, cpi: cpi, cpiEnd: cpi * (1 + inf), retired: retired,
-        mods: { income: 1, spending: 1, savings: 1, returnOverride: null, returnDelta: 0, contrib: {} },
+        mods: { income: 1, spending: 1, savings: 1, incomeAdd: 0, spendingAdd: 0, savingsAdd: 0, returnOverride: null, returnDelta: 0, contrib: {} },
         extraIncome: [], extraExpenses: [], activeEvents: []
       };
 
@@ -146,7 +146,8 @@
       }
 
       // 2. Income
-      y.employment = retired ? 0 : salary0 * Math.pow(1 + growth, t) * y.mods.income;
+      // Dollar adjustments join the salary first, so percentage adjustments (e.g. a sabbatical) scale them too.
+      y.employment = retired ? 0 : Math.max(0, (salary0 * Math.pow(1 + growth, t) + y.mods.incomeAdd) * y.mods.income);
       var B = plan.benefits;
       var cppStart = RP.util.clamp(Math.round(num(B.cppStartAge, 65)), 60, 70);
       var oasStart = RP.util.clamp(Math.round(num(B.oasStartAge, 65)), 65, 70);
@@ -193,7 +194,7 @@
         base = num(S.total) * cpi;
       }
       if (retired) base *= 1 + num(S.retirementChange);
-      base *= y.mods.spending;
+      base = Math.max(0, (base + y.mods.spendingAdd) * y.mods.spending);
       y.spendingBase = base;
       y.eventExpenses = RP.util.sum(y.extraExpenses, function (x) { return x.amount; });
       y.spending = base + y.eventExpenses;
@@ -320,6 +321,7 @@
       var contrib = { map: {}, rrsp: 0 }, wd = { map: {}, rrif: 0, capitalGains: 0, total: 0 };
       var taxRes, C = 0, unallocated = 0, shortfall = 0;
       var target = retired ? strategy.grossTarget(y, plan, { state: stratState, startTotal: startTotal }) : savingsMode.target(y, plan);
+      if (!retired && target != null && y.mods.savingsAdd) target = Math.max(0, target + y.mods.savingsAdd);
 
       if (!retired) {
         // ---- Accumulation ----

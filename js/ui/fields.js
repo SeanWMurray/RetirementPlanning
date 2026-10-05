@@ -165,13 +165,19 @@
   };
 
   /** Build a form for an object (e.g. an event) from field defs. Mutates `obj`. */
+  /** Fields may define showIf(obj) to appear only when relevant; visibility updates as values change. */
   ui.objectForm = function (defs, obj, onChange) {
-    return h('div.field-grid', defs.map(function (d) {
+    var rows = [];
+    function refresh() { rows.forEach(function (r) { if (r.def.showIf) r.el.style.display = r.def.showIf(obj) ? '' : 'none'; }); }
+    var grid = h('div.field-grid', defs.map(function (d) {
       var row = h('div.field' + (d.type === 'toggle' ? '.field-toggle' : '') + (d.type === 'text' || d.wide ? '.field-wide' : ''),
         h('label.field-label', h('span', d.label), d.help ? h('span.help', { tabindex: 0, 'data-tip': d.help }, ui.icon('info', 12)) : null),
-        ui.input(d, obj[d.key], function (v) { obj[d.key] = v; if (onChange) onChange(obj, d.key); }));
+        ui.input(d, obj[d.key], function (v) { obj[d.key] = v; refresh(); if (onChange) onChange(obj, d.key); }));
+      rows.push({ def: d, el: row });
       return linkLabel(row);
     }));
+    refresh();
+    return grid;
   };
 
   ui.PROVINCES = function () {
