@@ -1,0 +1,312 @@
+{
+  "app": "canadian-retirement-planner",
+  "schemaVersion": 2,
+  "meta": {
+    "name": "Mid-career engineer — Calgary",
+    "notes": "A 42-year-old engineer in Alberta with sizeable RRSP savings, two kids heading to university, and plans to travel early in retirement. Scenarios test retiring at 55 (with and without a market crash right at retirement), deferring CPP and OAS to 70, and switching to the 4% rule.",
+    "created": "2026-01-01T00:00:00.000Z",
+    "modified": "2026-01-01T00:00:00.000Z",
+    "example": true
+  },
+  "base": {
+    "profile": {
+      "currentAge": 42,
+      "retirementAge": 60,
+      "endAge": 95,
+      "province": "AB",
+      "startYear": 2026
+    },
+    "income": {
+      "salary": 145000,
+      "growth": 0.025
+    },
+    "tax": {
+      "year": "2026",
+      "mode": "calculated",
+      "flatRate": 0.3,
+      "customBrackets": [
+        {
+          "upTo": 50000,
+          "rate": 0.2
+        },
+        {
+          "upTo": 100000,
+          "rate": 0.3
+        },
+        {
+          "upTo": 200000,
+          "rate": 0.4
+        },
+        {
+          "upTo": null,
+          "rate": 0.5
+        }
+      ],
+      "customCredit": 15000,
+      "indexBrackets": true,
+      "includePayroll": true,
+      "selfEmployed": false,
+      "oasClawback": true
+    },
+    "spending": {
+      "mode": "total",
+      "total": 70000,
+      "retirementChange": -0.05,
+      "items": [
+        {
+          "id": "sp_housing",
+          "name": "Housing (rent/mortgage, tax, maintenance)",
+          "amount": 24000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_food",
+          "name": "Groceries & dining",
+          "amount": 10000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_transport",
+          "name": "Transportation",
+          "amount": 7000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_utilities",
+          "name": "Utilities & phone",
+          "amount": 4000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_insurance",
+          "name": "Insurance & health",
+          "amount": 3000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_personal",
+          "name": "Personal & discretionary",
+          "amount": 7000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_travel",
+          "name": "Travel",
+          "amount": 8000,
+          "phase": "retired",
+          "indexed": true
+        }
+      ]
+    },
+    "savings": {
+      "mode": "surplus",
+      "rate": 0.15,
+      "amount": 15000,
+      "enforceRoom": true,
+      "order": [
+        "rrsp",
+        "tfsa",
+        "cash",
+        "nonreg"
+      ]
+    },
+    "accounts": [
+      {
+        "id": "rrsp",
+        "name": "RRSP",
+        "type": "rrsp",
+        "balance": 310000,
+        "contribLimit": "legal",
+        "contributionCap": null,
+        "startingRoom": 15000,
+        "returnRate": null
+      },
+      {
+        "id": "tfsa",
+        "name": "TFSA",
+        "type": "tfsa",
+        "balance": 95000,
+        "contribLimit": "legal",
+        "contributionCap": null,
+        "startingRoom": 20000,
+        "returnRate": null
+      },
+      {
+        "id": "cash",
+        "name": "Cash",
+        "type": "cash",
+        "balance": 25000,
+        "contribLimit": "none",
+        "contributionCap": 0,
+        "startingRoom": null,
+        "returnRate": null
+      },
+      {
+        "id": "nonreg",
+        "name": "Non-registered",
+        "type": "nonreg",
+        "balance": 60000,
+        "contribLimit": "unlimited",
+        "contributionCap": null,
+        "startingRoom": null,
+        "returnRate": null,
+        "costBase": 45000
+      }
+    ],
+    "assumptions": {
+      "inflation": 0.021,
+      "returnPre": 0.06,
+      "returnPost": 0.05,
+      "cashReturn": 0.025,
+      "volatility": 0.11
+    },
+    "benefits": {
+      "cppEnabled": true,
+      "cppAt65": 16000,
+      "cppStartAge": 65,
+      "oasEnabled": true,
+      "oasStartAge": 65,
+      "oasResidency": 1
+    },
+    "retirement": {
+      "strategy": "needs",
+      "withdrawalRate": 0.04,
+      "withdrawalOrder": [
+        "cash",
+        "nonreg",
+        "rrsp",
+        "tfsa"
+      ],
+      "rrifMinimums": true
+    },
+    "events": [
+      {
+        "id": "ev_mid_1",
+        "type": "expense",
+        "enabled": true,
+        "label": "Kids' university",
+        "amount": 25000,
+        "startAge": 50,
+        "endAge": 57,
+        "everyYears": 1,
+        "indexed": true
+      },
+      {
+        "id": "ev_mid_2",
+        "type": "expense",
+        "enabled": true,
+        "label": "Vehicle every 8 years",
+        "amount": 45000,
+        "startAge": 45,
+        "endAge": 85,
+        "everyYears": 8,
+        "indexed": true
+      },
+      {
+        "id": "ev_mid_3",
+        "type": "expense",
+        "enabled": true,
+        "label": "Travel",
+        "amount": 15000,
+        "startAge": 60,
+        "endAge": 70,
+        "everyYears": 1,
+        "indexed": true
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "sc_mid_4",
+      "name": "Retire at 55",
+      "color": "#e0812f",
+      "visible": true,
+      "notes": "",
+      "overrides": {
+        "profile.retirementAge": 55
+      },
+      "events": [],
+      "disabledEvents": []
+    },
+    {
+      "id": "sc_mid_5",
+      "name": "Retire at 55 + crash",
+      "color": "#239c8f",
+      "visible": true,
+      "notes": "−30% the year of retirement, then −5%.",
+      "overrides": {
+        "profile.retirementAge": 55
+      },
+      "events": [
+        {
+          "id": "ev_mid_6",
+          "type": "returnOverride",
+          "enabled": true,
+          "label": "Crash at retirement",
+          "mode": "set",
+          "rate": -0.3,
+          "startAge": 55,
+          "endAge": 55
+        },
+        {
+          "id": "ev_mid_7",
+          "type": "returnOverride",
+          "enabled": true,
+          "label": "Weak recovery",
+          "mode": "set",
+          "rate": -0.05,
+          "startAge": 56,
+          "endAge": 56
+        }
+      ],
+      "disabledEvents": []
+    },
+    {
+      "id": "sc_mid_8",
+      "name": "Defer CPP & OAS to 70",
+      "color": "#8b5ca8",
+      "visible": true,
+      "notes": "",
+      "overrides": {
+        "benefits.cppStartAge": 70,
+        "benefits.oasStartAge": 70
+      },
+      "events": [],
+      "disabledEvents": []
+    },
+    {
+      "id": "sc_mid_9",
+      "name": "4% rule drawdown",
+      "color": "#c2416f",
+      "visible": true,
+      "notes": "Under the 4% rule spending is not guaranteed: a shortfall here means the fixed withdrawal did not cover planned spending that year, even though money remains.",
+      "overrides": {
+        "retirement.strategy": "fixedReal",
+        "retirement.withdrawalRate": 0.04
+      },
+      "events": [],
+      "disabledEvents": []
+    }
+  ],
+  "settings": {
+    "realDollars": true,
+    "chartMode": "stacked",
+    "hiddenColumns": [],
+    "activeTab": "projection",
+    "sensitivity": {
+      "metric": "endingReal",
+      "gridX": "returns",
+      "gridY": "retirementAge"
+    },
+    "monteCarlo": {
+      "runs": 500,
+      "seed": 42
+    }
+  }
+}

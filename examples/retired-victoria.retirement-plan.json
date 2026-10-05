@@ -1,0 +1,301 @@
+{
+  "app": "canadian-retirement-planner",
+  "schemaVersion": 2,
+  "meta": {
+    "name": "Recently retired — Victoria",
+    "notes": "A 67-year-old who retired at 65, now drawing on a RRIF, TFSA and non-registered account alongside CPP and OAS. Watch the OAS clawback and RRIF minimums in the Tax tab. Scenarios compare the 4% rule, drawing the RRIF first (\"RRIF meltdown\") to smooth taxable income, and a market crash early in retirement.",
+    "created": "2026-01-01T00:00:00.000Z",
+    "modified": "2026-01-01T00:00:00.000Z",
+    "example": true
+  },
+  "base": {
+    "profile": {
+      "currentAge": 67,
+      "retirementAge": 65,
+      "endAge": 95,
+      "province": "BC",
+      "startYear": 2026
+    },
+    "income": {
+      "salary": 0,
+      "growth": 0
+    },
+    "tax": {
+      "year": "2026",
+      "mode": "calculated",
+      "flatRate": 0.3,
+      "customBrackets": [
+        {
+          "upTo": 50000,
+          "rate": 0.2
+        },
+        {
+          "upTo": 100000,
+          "rate": 0.3
+        },
+        {
+          "upTo": 200000,
+          "rate": 0.4
+        },
+        {
+          "upTo": null,
+          "rate": 0.5
+        }
+      ],
+      "customCredit": 15000,
+      "indexBrackets": true,
+      "includePayroll": true,
+      "selfEmployed": false,
+      "oasClawback": true
+    },
+    "spending": {
+      "mode": "total",
+      "total": 55000,
+      "retirementChange": 0,
+      "items": [
+        {
+          "id": "sp_housing",
+          "name": "Housing (rent/mortgage, tax, maintenance)",
+          "amount": 24000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_food",
+          "name": "Groceries & dining",
+          "amount": 10000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_transport",
+          "name": "Transportation",
+          "amount": 7000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_utilities",
+          "name": "Utilities & phone",
+          "amount": 4000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_insurance",
+          "name": "Insurance & health",
+          "amount": 3000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_personal",
+          "name": "Personal & discretionary",
+          "amount": 7000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_travel",
+          "name": "Travel",
+          "amount": 8000,
+          "phase": "retired",
+          "indexed": true
+        }
+      ]
+    },
+    "savings": {
+      "mode": "surplus",
+      "rate": 0.15,
+      "amount": 15000,
+      "enforceRoom": true,
+      "order": [
+        "tfsa",
+        "nonreg",
+        "cash",
+        "rrsp"
+      ]
+    },
+    "accounts": [
+      {
+        "id": "rrsp",
+        "name": "RRIF",
+        "type": "rrsp",
+        "balance": 620000,
+        "contribLimit": "none",
+        "contributionCap": 0,
+        "startingRoom": null,
+        "returnRate": null
+      },
+      {
+        "id": "tfsa",
+        "name": "TFSA",
+        "type": "tfsa",
+        "balance": 145000,
+        "contribLimit": "legal",
+        "contributionCap": null,
+        "startingRoom": 7000,
+        "returnRate": null
+      },
+      {
+        "id": "cash",
+        "name": "Cash",
+        "type": "cash",
+        "balance": 40000,
+        "contribLimit": "none",
+        "contributionCap": 0,
+        "startingRoom": null,
+        "returnRate": null
+      },
+      {
+        "id": "nonreg",
+        "name": "Non-registered",
+        "type": "nonreg",
+        "balance": 210000,
+        "contribLimit": "unlimited",
+        "contributionCap": null,
+        "startingRoom": null,
+        "returnRate": null,
+        "costBase": 150000
+      }
+    ],
+    "assumptions": {
+      "inflation": 0.021,
+      "returnPre": 0.06,
+      "returnPost": 0.045,
+      "cashReturn": 0.025,
+      "volatility": 0.11
+    },
+    "benefits": {
+      "cppEnabled": true,
+      "cppAt65": 13800,
+      "cppStartAge": 65,
+      "oasEnabled": true,
+      "oasStartAge": 65,
+      "oasResidency": 1
+    },
+    "retirement": {
+      "strategy": "needs",
+      "withdrawalRate": 0.04,
+      "withdrawalOrder": [
+        "cash",
+        "nonreg",
+        "rrsp",
+        "tfsa"
+      ],
+      "rrifMinimums": true
+    },
+    "events": [
+      {
+        "id": "ev_retired_1",
+        "type": "expense",
+        "enabled": true,
+        "label": "Travel",
+        "amount": 20000,
+        "startAge": 67,
+        "endAge": 75,
+        "everyYears": 1,
+        "indexed": true
+      },
+      {
+        "id": "ev_retired_2",
+        "type": "lumpSum",
+        "enabled": true,
+        "label": "Downsize home (net)",
+        "amount": 250000,
+        "startAge": 76,
+        "taxType": "nontaxable",
+        "indexed": true
+      },
+      {
+        "id": "ev_retired_3",
+        "type": "expense",
+        "enabled": true,
+        "label": "Long-term care",
+        "amount": 60000,
+        "startAge": 88,
+        "endAge": 92,
+        "everyYears": 1,
+        "indexed": true
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "sc_retired_4",
+      "name": "4% rule",
+      "color": "#e0812f",
+      "visible": true,
+      "notes": "Under the 4% rule spending is not guaranteed: a shortfall here means the fixed withdrawal did not cover planned spending that year, even though money remains.",
+      "overrides": {
+        "retirement.strategy": "fixedReal",
+        "retirement.withdrawalRate": 0.04
+      },
+      "events": [],
+      "disabledEvents": []
+    },
+    {
+      "id": "sc_retired_5",
+      "name": "RRIF meltdown (draw RRIF first)",
+      "color": "#239c8f",
+      "visible": true,
+      "notes": "",
+      "overrides": {
+        "retirement.withdrawalOrder": [
+          "rrsp",
+          "cash",
+          "nonreg",
+          "tfsa"
+        ]
+      },
+      "events": [],
+      "disabledEvents": []
+    },
+    {
+      "id": "sc_retired_6",
+      "name": "Crash at 68",
+      "color": "#8b5ca8",
+      "visible": true,
+      "notes": "",
+      "overrides": {},
+      "events": [
+        {
+          "id": "ev_retired_7",
+          "type": "returnOverride",
+          "enabled": true,
+          "label": "Crash",
+          "mode": "set",
+          "rate": -0.25,
+          "startAge": 68,
+          "endAge": 68
+        },
+        {
+          "id": "ev_retired_8",
+          "type": "returnOverride",
+          "enabled": true,
+          "label": "Bear market",
+          "mode": "set",
+          "rate": -0.1,
+          "startAge": 69,
+          "endAge": 69
+        }
+      ],
+      "disabledEvents": []
+    }
+  ],
+  "settings": {
+    "realDollars": true,
+    "chartMode": "stacked",
+    "hiddenColumns": [],
+    "activeTab": "projection",
+    "sensitivity": {
+      "metric": "endingReal",
+      "gridX": "returns",
+      "gridY": "retirementAge"
+    },
+    "monteCarlo": {
+      "runs": 500,
+      "seed": 42
+    }
+  }
+}

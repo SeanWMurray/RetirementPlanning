@@ -46,6 +46,7 @@
     return [
       { label: 'New Plan', onclick: newPlan },
       { label: 'Open Plan…', hint: 'Ctrl+O', onclick: importPlan },
+      { label: 'Open Example…', disabled: !(RP.examples && RP.examples.length), onclick: openExample },
       { label: 'Save Plan As…', hint: 'Ctrl+S', onclick: exportPlan },
       { separator: true },
       { label: 'Export Table to CSV…', onclick: function () { app.showTab('projection'); setTimeout(function () { var b = document.querySelector('[data-action="csv"]'); if (b) b.click(); }, 50); } },
@@ -357,7 +358,7 @@
         if (Math.abs(v - bv) > 0.5) {
           var good = (v - bv) * k.better > 0;
           var txt = k.format === fmt.compact || k.format === fmt.money ? fmt.compact(v - bv) : (v - bv > 0 ? '+' : '') + Math.round(v - bv) + ' yrs';
-          if (txt.charAt(0) !== '−' && txt.charAt(0) !== '+') txt = '+' + txt;
+          if (txt.charAt(0) !== '−' && txt.charAt(0) !== '-' && txt.charAt(0) !== '+') txt = '+' + txt;
           delta = h('span.delta' + (good ? '.good' : '.bad'), txt);
         }
       }
@@ -445,6 +446,30 @@
       ['Enter (on a table row)', 'Open the year menu'], ['Esc', 'Close menu or dialog']];
     ui.modal('Keyboard Shortcuts', h('table.grid.compact', h('tbody', rows.map(function (r) { return h('tr', h('td.left', h('b', r[0])), h('td.left', r[1])); }))), [{ label: 'OK', primary: true, onclick: function () {} }]);
   }
+  /** Pick one of the bundled example plans (js/data/examples.js, built by tools/build-examples.js). */
+  function openExample() {
+    var dlg;
+    var rows = (RP.examples || []).map(function (ex) {
+      var d = ex.doc, p = d.base.profile, prov = RP.tax.dataFor(d.base.tax.year).provinces[p.province];
+      return h('tr',
+        h('td.left', h('b', ex.name), h('span.muted', ex.summary)),
+        h('td.left', prov ? prov.name : p.province),
+        h('td', String(p.currentAge)),
+        h('td', String(d.scenarios.length)),
+        h('td', ui.button('Open', function () {
+          dlg.close();
+          RP.store.importJson(JSON.stringify(d));
+          app.showTab('scenarios');
+          app.status('Opened example: ' + ex.name + ' (Edit › Undo returns to your previous plan)');
+        }, { cls: 'small' })));
+    });
+    dlg = ui.modal('Open Example Plan', h('div.example-list',
+      h('p.note', 'Ready-made plans with scenarios to explore. Opening one replaces the plan currently in the window; save yours first (File › Save Plan As), or use Edit › Undo afterwards.'),
+      h('div.table-wrap', h('table.grid',
+        h('thead', h('tr', h('th.left', 'Example'), h('th.left', 'Province'), h('th', 'Age'), h('th', 'Scenarios'), h('th', ''))),
+        h('tbody', rows)))), [{ label: 'Cancel', onclick: function () {} }], { wide: true });
+  }
+
   function showAbout() {
     ui.modal('About', h('div',
       h('p', h('b', 'Canadian Retirement Planner'), ' version ' + RP.version),

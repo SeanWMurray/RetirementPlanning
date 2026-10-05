@@ -1,0 +1,308 @@
+{
+  "app": "canadian-retirement-planner",
+  "schemaVersion": 2,
+  "meta": {
+    "name": "Early career renter — Toronto",
+    "notes": "A 28-year-old renting in Toronto, saving whatever is left after spending. Lower income, so the TFSA is filled before the RRSP. Scenarios compare buying a condo at 35 (down payment plus higher housing costs until the mortgage is paid), an aggressive savings plan to retire at 50, and a faster promotion track.",
+    "created": "2026-01-01T00:00:00.000Z",
+    "modified": "2026-01-01T00:00:00.000Z",
+    "example": true
+  },
+  "base": {
+    "profile": {
+      "currentAge": 28,
+      "retirementAge": 60,
+      "endAge": 95,
+      "province": "ON",
+      "startYear": 2026
+    },
+    "income": {
+      "salary": 72000,
+      "growth": 0.035
+    },
+    "tax": {
+      "year": "2026",
+      "mode": "calculated",
+      "flatRate": 0.3,
+      "customBrackets": [
+        {
+          "upTo": 50000,
+          "rate": 0.2
+        },
+        {
+          "upTo": 100000,
+          "rate": 0.3
+        },
+        {
+          "upTo": 200000,
+          "rate": 0.4
+        },
+        {
+          "upTo": null,
+          "rate": 0.5
+        }
+      ],
+      "customCredit": 15000,
+      "indexBrackets": true,
+      "includePayroll": true,
+      "selfEmployed": false,
+      "oasClawback": true
+    },
+    "spending": {
+      "mode": "total",
+      "total": 42000,
+      "retirementChange": 0,
+      "items": [
+        {
+          "id": "sp_housing",
+          "name": "Housing (rent/mortgage, tax, maintenance)",
+          "amount": 24000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_food",
+          "name": "Groceries & dining",
+          "amount": 10000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_transport",
+          "name": "Transportation",
+          "amount": 7000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_utilities",
+          "name": "Utilities & phone",
+          "amount": 4000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_insurance",
+          "name": "Insurance & health",
+          "amount": 3000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_personal",
+          "name": "Personal & discretionary",
+          "amount": 7000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_travel",
+          "name": "Travel",
+          "amount": 8000,
+          "phase": "retired",
+          "indexed": true
+        }
+      ]
+    },
+    "savings": {
+      "mode": "surplus",
+      "rate": 0.15,
+      "amount": 15000,
+      "enforceRoom": true,
+      "order": [
+        "tfsa",
+        "rrsp",
+        "cash",
+        "nonreg"
+      ]
+    },
+    "accounts": [
+      {
+        "id": "tfsa",
+        "name": "TFSA",
+        "type": "tfsa",
+        "balance": 21000,
+        "contribLimit": "legal",
+        "contributionCap": null,
+        "startingRoom": 45000,
+        "returnRate": null
+      },
+      {
+        "id": "rrsp",
+        "name": "RRSP",
+        "type": "rrsp",
+        "balance": 8000,
+        "contribLimit": "legal",
+        "contributionCap": null,
+        "startingRoom": 22000,
+        "returnRate": null
+      },
+      {
+        "id": "cash",
+        "name": "Emergency fund (HISA)",
+        "type": "cash",
+        "balance": 6000,
+        "contribLimit": "none",
+        "contributionCap": 0,
+        "startingRoom": null,
+        "returnRate": null
+      },
+      {
+        "id": "nonreg",
+        "name": "Non-registered",
+        "type": "nonreg",
+        "balance": 0,
+        "contribLimit": "unlimited",
+        "contributionCap": null,
+        "startingRoom": null,
+        "returnRate": null,
+        "costBase": 0
+      }
+    ],
+    "assumptions": {
+      "inflation": 0.021,
+      "returnPre": 0.06,
+      "returnPost": 0.05,
+      "cashReturn": 0.025,
+      "volatility": 0.11
+    },
+    "benefits": {
+      "cppEnabled": true,
+      "cppAt65": 10500,
+      "cppStartAge": 65,
+      "oasEnabled": true,
+      "oasStartAge": 65,
+      "oasResidency": 1
+    },
+    "retirement": {
+      "strategy": "needs",
+      "withdrawalRate": 0.04,
+      "withdrawalOrder": [
+        "cash",
+        "nonreg",
+        "rrsp",
+        "tfsa"
+      ],
+      "rrifMinimums": true
+    },
+    "events": [
+      {
+        "id": "ev_early_1",
+        "type": "expense",
+        "enabled": true,
+        "label": "Wedding",
+        "amount": 30000,
+        "startAge": 31,
+        "endAge": 31,
+        "everyYears": 1,
+        "indexed": true
+      },
+      {
+        "id": "ev_early_2",
+        "type": "expense",
+        "enabled": true,
+        "label": "Car every 10 years",
+        "amount": 30000,
+        "startAge": 30,
+        "endAge": 80,
+        "everyYears": 10,
+        "indexed": true
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "sc_early_3",
+      "name": "Buy a condo at 35",
+      "color": "#e0812f",
+      "visible": true,
+      "notes": "$70k down payment, ownership costs ~15% above renting until the mortgage is paid at 60, downsize at 80.",
+      "overrides": {},
+      "events": [
+        {
+          "id": "ev_early_4",
+          "type": "expense",
+          "enabled": true,
+          "label": "Condo down payment + closing",
+          "amount": 70000,
+          "startAge": 35,
+          "endAge": 35,
+          "everyYears": 1,
+          "indexed": true
+        },
+        {
+          "id": "ev_early_5",
+          "type": "adjustment",
+          "enabled": true,
+          "label": "Mortgage + condo fees vs rent",
+          "target": "spending",
+          "kind": "step",
+          "pct": 0.15,
+          "startAge": 35,
+          "endAge": 59
+        },
+        {
+          "id": "ev_early_6",
+          "type": "lumpSum",
+          "enabled": true,
+          "label": "Sell condo (net)",
+          "amount": 300000,
+          "startAge": 80,
+          "taxType": "nontaxable",
+          "indexed": true
+        }
+      ],
+      "disabledEvents": []
+    },
+    {
+      "id": "sc_early_7",
+      "name": "Aggressive saver — retire at 50",
+      "color": "#239c8f",
+      "visible": true,
+      "notes": "Spend $36k instead of $42k and retire at 50.",
+      "overrides": {
+        "profile.retirementAge": 50,
+        "spending.total": 36000
+      },
+      "events": [],
+      "disabledEvents": []
+    },
+    {
+      "id": "sc_early_8",
+      "name": "Promotion track",
+      "color": "#8b5ca8",
+      "visible": true,
+      "notes": "An extra 2%/yr of raises from 30 to 40.",
+      "overrides": {},
+      "events": [
+        {
+          "id": "ev_early_9",
+          "type": "adjustment",
+          "enabled": true,
+          "label": "Promotion track",
+          "target": "income",
+          "kind": "growth",
+          "pct": 0.02,
+          "startAge": 30,
+          "endAge": 40
+        }
+      ],
+      "disabledEvents": []
+    }
+  ],
+  "settings": {
+    "realDollars": true,
+    "chartMode": "stacked",
+    "hiddenColumns": [],
+    "activeTab": "projection",
+    "sensitivity": {
+      "metric": "endingReal",
+      "gridX": "returns",
+      "gridY": "retirementAge"
+    },
+    "monteCarlo": {
+      "runs": 500,
+      "seed": 42
+    }
+  }
+}

@@ -88,7 +88,7 @@
             if (i > 0 && m.better && typeof v === 'number' && typeof bv === 'number' && Math.abs(v - bv) > 0.5) {
               var good = (v - bv) * m.better > 0;
               var dtext = m.f === fmt.compact || m.f === fmt.money ? fmt.compact(v - bv) : (v - bv > 0 ? '+' : '') + Math.round(v - bv);
-              if (dtext.charAt(0) !== '−' && dtext.charAt(0) !== '+') dtext = '+' + dtext;
+              if (dtext.charAt(0) !== '−' && dtext.charAt(0) !== '-' && dtext.charAt(0) !== '+') dtext = '+' + dtext;
               delta = h('span.delta' + (good ? '.good' : '.bad'), dtext);
             }
             return h('td', m.f(v, r), delta ? ' ' : null, delta);
@@ -118,6 +118,7 @@
                 ui.confirm('Make this the base plan?', 'The base plan will be replaced by "' + s.name + '" (its overrides and events are folded in). Other scenarios will now be relative to it.', function () { store.promoteScenario(s.id); }, 'Promote');
               }, { icon: 'up', cls: 'ghost icon-only', aria: 'Promote to base', title: 'Promote to base plan' }),
               ui.button(null, function () { ui.confirm('Delete scenario', 'Delete "' + s.name + '"?', function () { store.removeScenario(s.id); }, 'Delete'); }, { icon: 'trash', cls: 'ghost icon-only', aria: 'Delete', title: 'Delete' }))),
+          s.notes ? h('p.scenario-notes', s.notes) : null,
           overrides.length || s.events.length || s.disabledEvents.length ? h('ul.override-list',
             overrides.map(function (k) {
               var d = describeOverride(k, s.overrides[k]);

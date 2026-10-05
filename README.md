@@ -42,6 +42,21 @@ Every view comes in a light and a dark theme. The app follows your system settin
 - **Output.** Year-by-year table with selectable columns, CSV export, print/PDF, and today's-dollars vs future-dollars views.
 - **Saving.** Autosaves in your browser (localStorage). Export/import `.json` plan files, or drag a plan file onto the page. Undo/redo.
 
+## Example plans
+
+Six ready-made plans with scenarios ship with the app. Open them with **File › Open Example…**, or download them from [`examples/`](examples/):
+
+| Example | Situation | Scenarios |
+|---|---|---|
+| [Early career renter — Toronto](examples/early-career-toronto.retirement-plan.json) | 28, ON, $72k, TFSA-first | Buy a condo · retire at 50 · promotion track |
+| [Mid-career engineer — Calgary](examples/mid-career-calgary.retirement-plan.json) | 42, AB, $145k, RRSP-heavy | Retire at 55 · crash at retirement · CPP/OAS at 70 · 4% rule |
+| [Teacher with a DB pension — Halifax](examples/teacher-db-pension-halifax.retirement-plan.json) | 50, NS, $98k, DB pension | Retire at 55 (reduced pension) · tutoring · long-term care |
+| [Self-employed consultant — Montréal](examples/self-employed-montreal.retirement-plan.json) | 45, QC, $120k self-employed | Sell the business · sabbatical · lower returns |
+| [Recently retired — Victoria](examples/retired-victoria.retirement-plan.json) | 67, BC, retired | 4% rule · RRIF meltdown · crash at 68 |
+| [Late starter — Winnipeg](examples/late-starter-winnipeg.retirement-plan.json) | 52, MB, $68k, little saved | Work longer · spend less · inheritance · all three |
+
+See [examples/README.md](examples/README.md) for each plan's story and results.
+
 ## Running it
 
 **Locally:** download or zip this folder and double-click `index.html`. You don't need to run any commands.
@@ -76,6 +91,8 @@ js/ui/                     interface (plain DOM + Chart.js)
   panels/*.js              one file per tab (RP.tabs)
 tests/run-tests.js         engine tests: `node tests/run-tests.js`
 docs/screenshots/          images used in this README (regenerate: node tools/screenshots.js)
+examples/                  example plan files (generated: node tools/build-examples.js)
+js/data/examples.js        the same examples bundled for File › Open Example (generated)
 ```
 
 Files are plain `<script>`s, not ES modules, because browsers block modules on `file://`. Each file attaches what it defines to one global, `RP`.

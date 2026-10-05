@@ -11,7 +11,7 @@ var root = path.join(__dirname, '..');
 [
   'js/core.js', 'js/data/tax-2026.js', 'js/engine/tax.js', 'js/engine/events.js',
   'js/engine/strategies.js', 'js/engine/projection.js', 'js/engine/scenarios.js',
-  'js/engine/analysis.js', 'js/state/schema.js'
+  'js/engine/analysis.js', 'js/state/schema.js', 'js/data/examples.js'
 ].forEach(function (f) { vm.runInThisContext(fs.readFileSync(path.join(root, f), 'utf8'), { filename: f }); });
 
 var RP = globalThis.RP;
@@ -244,6 +244,18 @@ test('normalize fills new defaults into old documents', function () {
   var old = { app: 'canadian-retirement-planner', schemaVersion: 1, base: { profile: { currentAge: 50 } } };
   var n = RP.schema.normalize(old);
   ok(n.base.profile.currentAge === 50 && n.base.assumptions.inflation > 0);
+});
+
+console.log('Example plans');
+test('every example plan loads and projects', function () {
+  ok(RP.examples.length >= 6);
+  RP.examples.forEach(function (ex) {
+    var doc = RP.schema.normalize(JSON.parse(JSON.stringify(ex.doc)));
+    var file = JSON.parse(fs.readFileSync(path.join(root, 'examples', ex.file), 'utf8'));
+    ok(JSON.stringify(file) === JSON.stringify(ex.doc), ex.file + ' is out of sync with js/data/examples.js (run node tools/build-examples.js)');
+    RP.scenarios.runAll(doc).forEach(function (r) { ok(r.result.years.length > 0, ex.slug + ' / ' + r.name); });
+    ok(RP.scenarios.runAll(doc)[0].result.summary.success || ex.slug === 'late-starter-winnipeg', ex.slug + ' base plan should be funded');
+  });
 });
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');

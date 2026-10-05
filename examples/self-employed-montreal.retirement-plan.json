@@ -1,0 +1,288 @@
+{
+  "app": "canadian-retirement-planner",
+  "schemaVersion": 2,
+  "meta": {
+    "name": "Self-employed consultant — Montréal",
+    "notes": "A 45-year-old self-employed consultant in Quebec. Tax uses Quebec brackets, the federal abatement, and QPP on both the employee and employer side (Income tax › Self-employed). The business sale is entered as a non-taxable lump sum on the assumption that it is sheltered by the lifetime capital gains exemption; adjust if that does not apply.",
+    "created": "2026-01-01T00:00:00.000Z",
+    "modified": "2026-01-01T00:00:00.000Z",
+    "example": true
+  },
+  "base": {
+    "profile": {
+      "currentAge": 45,
+      "retirementAge": 62,
+      "endAge": 95,
+      "province": "QC",
+      "startYear": 2026
+    },
+    "income": {
+      "salary": 120000,
+      "growth": 0.02
+    },
+    "tax": {
+      "year": "2026",
+      "mode": "calculated",
+      "flatRate": 0.3,
+      "customBrackets": [
+        {
+          "upTo": 50000,
+          "rate": 0.2
+        },
+        {
+          "upTo": 100000,
+          "rate": 0.3
+        },
+        {
+          "upTo": 200000,
+          "rate": 0.4
+        },
+        {
+          "upTo": null,
+          "rate": 0.5
+        }
+      ],
+      "customCredit": 15000,
+      "indexBrackets": true,
+      "includePayroll": true,
+      "selfEmployed": true,
+      "oasClawback": true
+    },
+    "spending": {
+      "mode": "total",
+      "total": 60000,
+      "retirementChange": 0,
+      "items": [
+        {
+          "id": "sp_housing",
+          "name": "Housing (rent/mortgage, tax, maintenance)",
+          "amount": 24000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_food",
+          "name": "Groceries & dining",
+          "amount": 10000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_transport",
+          "name": "Transportation",
+          "amount": 7000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_utilities",
+          "name": "Utilities & phone",
+          "amount": 4000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_insurance",
+          "name": "Insurance & health",
+          "amount": 3000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_personal",
+          "name": "Personal & discretionary",
+          "amount": 7000,
+          "phase": "all",
+          "indexed": true
+        },
+        {
+          "id": "sp_travel",
+          "name": "Travel",
+          "amount": 8000,
+          "phase": "retired",
+          "indexed": true
+        }
+      ]
+    },
+    "savings": {
+      "mode": "surplus",
+      "rate": 0.15,
+      "amount": 15000,
+      "enforceRoom": true,
+      "order": [
+        "rrsp",
+        "tfsa",
+        "cash",
+        "nonreg"
+      ]
+    },
+    "accounts": [
+      {
+        "id": "rrsp",
+        "name": "RRSP",
+        "type": "rrsp",
+        "balance": 180000,
+        "contribLimit": "legal",
+        "contributionCap": null,
+        "startingRoom": 40000,
+        "returnRate": null
+      },
+      {
+        "id": "tfsa",
+        "name": "TFSA",
+        "type": "tfsa",
+        "balance": 70000,
+        "contribLimit": "legal",
+        "contributionCap": null,
+        "startingRoom": 25000,
+        "returnRate": null
+      },
+      {
+        "id": "cash",
+        "name": "Business cash reserve",
+        "type": "cash",
+        "balance": 40000,
+        "contribLimit": "none",
+        "contributionCap": 0,
+        "startingRoom": null,
+        "returnRate": null
+      },
+      {
+        "id": "nonreg",
+        "name": "Non-registered",
+        "type": "nonreg",
+        "balance": 120000,
+        "contribLimit": "unlimited",
+        "contributionCap": null,
+        "startingRoom": null,
+        "returnRate": null,
+        "costBase": 90000
+      }
+    ],
+    "assumptions": {
+      "inflation": 0.021,
+      "returnPre": 0.06,
+      "returnPost": 0.05,
+      "cashReturn": 0.025,
+      "volatility": 0.11
+    },
+    "benefits": {
+      "cppEnabled": true,
+      "cppAt65": 13500,
+      "cppStartAge": 65,
+      "oasEnabled": true,
+      "oasStartAge": 65,
+      "oasResidency": 1
+    },
+    "retirement": {
+      "strategy": "needs",
+      "withdrawalRate": 0.04,
+      "withdrawalOrder": [
+        "cash",
+        "nonreg",
+        "rrsp",
+        "tfsa"
+      ],
+      "rrifMinimums": true
+    },
+    "events": [
+      {
+        "id": "ev_self_1",
+        "type": "adjustment",
+        "enabled": true,
+        "label": "Slow years",
+        "target": "income",
+        "kind": "step",
+        "pct": -0.3,
+        "startAge": 48,
+        "endAge": 49
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "sc_self_2",
+      "name": "Sell the business at 60",
+      "color": "#e0812f",
+      "visible": true,
+      "notes": "$350k net, assumed sheltered by the LCGE.",
+      "overrides": {
+        "profile.retirementAge": 60
+      },
+      "events": [
+        {
+          "id": "ev_self_3",
+          "type": "lumpSum",
+          "enabled": true,
+          "label": "Business sale (net)",
+          "amount": 350000,
+          "startAge": 60,
+          "taxType": "nontaxable",
+          "indexed": true
+        }
+      ],
+      "disabledEvents": []
+    },
+    {
+      "id": "sc_self_4",
+      "name": "Sabbatical at 50",
+      "color": "#239c8f",
+      "visible": true,
+      "notes": "",
+      "overrides": {},
+      "events": [
+        {
+          "id": "ev_self_5",
+          "type": "adjustment",
+          "enabled": true,
+          "label": "Sabbatical",
+          "target": "income",
+          "kind": "step",
+          "pct": -1,
+          "startAge": 50,
+          "endAge": 50
+        },
+        {
+          "id": "ev_self_6",
+          "type": "expense",
+          "enabled": true,
+          "label": "Sabbatical travel",
+          "amount": 25000,
+          "startAge": 50,
+          "endAge": 50,
+          "everyYears": 1,
+          "indexed": true
+        }
+      ],
+      "disabledEvents": []
+    },
+    {
+      "id": "sc_self_7",
+      "name": "Returns 1.5 pp lower",
+      "color": "#8b5ca8",
+      "visible": true,
+      "notes": "",
+      "overrides": {
+        "assumptions.returnPre": 0.045,
+        "assumptions.returnPost": 0.035
+      },
+      "events": [],
+      "disabledEvents": []
+    }
+  ],
+  "settings": {
+    "realDollars": true,
+    "chartMode": "stacked",
+    "hiddenColumns": [],
+    "activeTab": "projection",
+    "sensitivity": {
+      "metric": "endingReal",
+      "gridX": "returns",
+      "gridY": "retirementAge"
+    },
+    "monteCarlo": {
+      "runs": 500,
+      "seed": 42
+    }
+  }
+}

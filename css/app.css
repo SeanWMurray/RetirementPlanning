@@ -360,6 +360,9 @@ table.grid { border-collapse: separate; border-spacing: 0; width: 100%; font-var
 .scenario-head .input { flex: 1; font-weight: 600; }
 .scenario-head .btn-row { flex-wrap: nowrap; gap: 1px; }
 .scenario-card > p.muted { padding: 5px 8px; }
+.scenario-notes { padding: 4px 8px 0; color: var(--text-2); font-style: italic; }
+.example-list .grid td { height: auto; padding: 5px 6px; white-space: normal; vertical-align: top; }
+.example-list .grid td.left b { display: block; }
 .override-list { list-style: none; margin: 0; padding: 2px 6px 4px; }
 .override-list li { display: flex; gap: 8px; align-items: center; min-height: 20px; }
 .override-list li + li { border-top: 1px dotted var(--border-light); }
