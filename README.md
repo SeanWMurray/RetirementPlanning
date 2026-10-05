@@ -2,6 +2,25 @@
 
 A private, browser-only retirement planning tool for Canadians. No server, no account, no build step. Open `index.html` and plan.
 
+![Projection view, light theme](docs/screenshots/light-projection.png)
+
+![Projection view, dark theme](docs/screenshots/dark-projection.png)
+
+## Screenshots
+
+Every view comes in a light and a dark theme. The app follows your system setting by default; you can switch under **View › Theme**.
+
+| | Light | Dark |
+|---|---|---|
+| **Year-by-year table**: click any row to add an event at that age | [![](docs/screenshots/light-table-menu.png)](docs/screenshots/light-table-menu.png) | [![](docs/screenshots/dark-table-menu.png)](docs/screenshots/dark-table-menu.png) |
+| **Scenarios**: overlay and compare against the base plan | [![](docs/screenshots/light-scenarios.png)](docs/screenshots/light-scenarios.png) | [![](docs/screenshots/dark-scenarios.png)](docs/screenshots/dark-scenarios.png) |
+| **Sensitivity**: solvers, tornado chart, two-way grid | [![](docs/screenshots/light-sensitivity.png)](docs/screenshots/light-sensitivity.png) | [![](docs/screenshots/dark-sensitivity.png)](docs/screenshots/dark-sensitivity.png) |
+| **Monte Carlo**: probability of success and percentile bands | [![](docs/screenshots/light-montecarlo.png)](docs/screenshots/light-montecarlo.png) | [![](docs/screenshots/dark-montecarlo.png)](docs/screenshots/dark-montecarlo.png) |
+| **Tax**: full return-style breakdown for any year | [![](docs/screenshots/light-tax.png)](docs/screenshots/light-tax.png) | [![](docs/screenshots/dark-tax.png)](docs/screenshots/dark-tax.png) |
+| **Events**: timeline of life events across the plan | [![](docs/screenshots/light-events.png)](docs/screenshots/light-events.png) | [![](docs/screenshots/dark-events.png)](docs/screenshots/dark-events.png) |
+
+## Features
+
 - **Tax engine.** Federal plus every province and territory, using 2026 brackets. It handles the basic personal amount (with phase-outs), age, pension and Canada employment amounts, and CPP/QPP, EI and QPIP. It also covers enhanced CPP deductions, the OAS clawback, the Ontario surtax and Health Premium, and the Quebec abatement. Brackets index forward with inflation. You can override with a flat rate or your own brackets.
 - **Accounts.** RRSP/RRIF (deductible contributions, taxable withdrawals, RRIF minimums from 72), TFSA, non-registered (cost base tracked, capital gains taxed on withdrawal) and cash/HISA (interest taxed annually). Contribution and withdrawal orders are configurable, with per-account caps and return overrides.
 - **Government benefits.** CPP with early/late adjustment and OAS with deferral, residency, the 10% boost at 75, and the clawback.
@@ -55,6 +74,7 @@ js/ui/                     interface (plain DOM + Chart.js)
   inputs.js                left panel sections (RP.inputSections)
   panels/*.js              one file per tab (RP.tabs)
 tests/run-tests.js         engine tests: `node tests/run-tests.js`
+docs/screenshots/          images used in this README (regenerate: node tools/screenshots.js)
 ```
 
 Files are plain `<script>`s, not ES modules, because browsers block modules on `file://`. Each file attaches what it defines to one global, `RP`.
