@@ -24,7 +24,7 @@
   schema.APP_ID = 'canadian-retirement-planner';
   schema.SCHEMA_VERSION = 1;
 
-  schema.SCENARIO_COLORS = ['#eb6834', '#1baf7a', '#e87ba4', '#4a3aa7', '#eda100', '#008300', '#e34948'];
+  schema.SCENARIO_COLORS = ['#e0812f', '#239c8f', '#8b5ca8', '#c2416f', '#c49a1c', '#3f8f3a', '#5a86cf'];
 
   schema.defaultBase = function () {
     return {

@@ -9,6 +9,7 @@
   'use strict';
   var ui = RP.ui, h = ui.h, fmt = RP.fmt;
   var cols = RP.tableColumns = RP.createRegistry('tableColumns');
+  var selectedAge = null;
 
   function c(def) { cols.register(def); }
   c({ id: 'age', label: 'Age', group: 'Timeline', kind: 'none', get: function (y) { return y.age; }, format: String, sticky: true, default: true });
@@ -134,8 +135,9 @@
           items.push({ label: (isVisible(col, hidden) ? '✓ ' : '  ') + col.label, onclick: function () { toggleColumn(col); } });
         });
         ui.menu(e.clientX, e.clientY, items).classList.add('menu-tall');
-      }, { icon: 'layers', cls: 'ghost small' });
-      var csvBtn = ui.button('CSV', function () { exportCsv(res, columns, real); }, { icon: 'download', cls: 'ghost small', title: 'Download the table as CSV' });
+      }, { icon: 'layers', cls: 'small' });
+      var csvBtn = ui.button('Export CSV', function () { exportCsv(res, columns, real); }, { icon: 'download', cls: 'small', title: 'Download the table as CSV' });
+      csvBtn.dataset.action = 'csv';
 
       var evList = RP.store.allEvents();
       var table = h('table.grid',
@@ -144,7 +146,12 @@
         }))),
         h('tbody', res.years.map(function (y) {
           var cls = (y.retired ? '.retired' : '') + (y.age === res.plan.profile.retirementAge ? '.ret-start' : '') + (y.shortfall > 1 ? '.short' : '');
-          var tr = h('tr' + cls, { tabindex: 0, onclick: function (e) { openAgeMenu(y.age, e); },
+          var tr = h('tr' + cls + (y.age === selectedAge ? '.selected' : ''), { tabindex: 0, onclick: function (e) {
+              selectedAge = y.age;
+              table.querySelectorAll('tr.selected').forEach(function (r) { r.classList.remove('selected'); });
+              tr.classList.add('selected');
+              openAgeMenu(y.age, e);
+            },
             onkeydown: function (e) { if (e.key === 'Enter') { var r = tr.getBoundingClientRect(); openAgeMenu(y.age, { clientX: r.left + 80, clientY: r.bottom }); } } },
           columns.map(function (col) {
             if (col.isEvents) {

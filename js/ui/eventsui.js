@@ -12,8 +12,8 @@
     return h('div',
       def.description ? h('p.note', def.description) : null,
       ui.objectForm(def.fields, ev),
-      h('div.field.field-toggle', h('label.field-label', h('span', 'Enabled')),
-        ui.input({ type: 'toggle', label: 'Enabled' }, ev.enabled !== false, function (v) { ev.enabled = v; })));
+      ui.objectForm([{ key: 'enabled', label: 'Enabled (include in projection)', type: 'toggle' }], Object.defineProperty({}, 'enabled', {
+        get: function () { return ev.enabled !== false; }, set: function (v) { ev.enabled = v; }, enumerable: true })));
   }
 
   /** Dialog for a brand-new event (not saved until "Add"). */

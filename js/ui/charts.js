@@ -30,6 +30,11 @@
       if (p && !p.querySelector('.chart-offline')) p.appendChild(ui.h('div.chart-offline', 'Charts need an internet connection to load Chart.js from the CDN. Tables and calculations still work.'));
       return null;
     }
+    var C = window.Chart;
+    C.defaults.font.family = getComputedStyle(document.body).fontFamily;
+    C.defaults.font.size = 11;
+    C.defaults.color = ui.cssVar('--text-2');
+    C.defaults.elements.bar.borderRadius = 0;
     var old = instances.get(canvas);
     if (old) old.destroy();
     var c = new window.Chart(canvas, config);
@@ -41,8 +46,8 @@
     return {
       stacked: !!stacked,
       grid: { color: c.grid, drawTicks: false },
-      border: { display: false },
-      ticks: { color: c.muted, padding: 8, callback: function (v) { return fmt.compact(v); }, font: { size: 11 } }
+      border: { display: true, color: c.axis },
+      ticks: { color: c.muted, padding: 6, callback: function (v) { return fmt.compact(v); } }
     };
   }
   function ageAxis(c, stacked) {
@@ -50,17 +55,18 @@
       stacked: !!stacked,
       grid: { display: false },
       border: { color: c.axis },
-      ticks: { color: c.muted, autoSkip: true, maxRotation: 0, font: { size: 11 } },
-      title: { display: true, text: 'Age', color: c.muted, font: { size: 11 } }
+      ticks: { color: c.muted, autoSkip: true, maxRotation: 0 },
+      title: { display: true, text: 'Age', color: c.muted }
     };
   }
   function legend(c) {
-    return { position: 'top', align: 'start', labels: { color: c.text, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: 'rectRounded', font: { size: 12 } } };
+    return { position: 'top', align: 'start', labels: { color: c.text, boxWidth: 12, boxHeight: 8, padding: 12, font: { size: 11 } } };
   }
   function tooltip(c, title) {
     return {
       mode: 'index', intersect: false, backgroundColor: c.surface, titleColor: c.ink, bodyColor: c.text,
-      borderColor: c.axis, borderWidth: 1, padding: 10, boxPadding: 4, usePointStyle: true,
+      borderColor: c.axis, borderWidth: 1, padding: 6, boxPadding: 3, cornerRadius: 0, caretSize: 0,
+      titleFont: { size: 11, weight: '600' }, bodyFont: { size: 11 }, boxWidth: 8, boxHeight: 8,
       callbacks: {
         title: title || function (items) { return items.length ? 'Age ' + items[0].label : ''; },
         label: function (it) { return ' ' + it.dataset.label + ': ' + fmt.money(it.parsed.y != null ? it.parsed.y : it.raw); }
@@ -87,7 +93,7 @@
         ctx.beginPath(); ctx.moveTo(px, y.top); ctx.lineTo(px, y.bottom); ctx.stroke();
         ctx.setLineDash([]);
         ctx.fillStyle = c.text;
-        ctx.font = '11px system-ui, sans-serif';
+        ctx.font = '11px ' + getComputedStyle(document.body).fontFamily;
         ctx.textAlign = 'left';
         ctx.fillText(m.label, px + 4, y.top + 12);
       });
@@ -192,8 +198,8 @@
       ds('Employment', 0, function (y) { return y.employment; }),
       ds('CPP', 1, function (y) { return y.cpp; }),
       ds('OAS', 2, function (y) { return y.oas; }),
-      ds('Other income', 3, function (y) { return y.otherIncome; }),
-      ds('Withdrawals', 6, function (y) { return y.withdrawals; }),
+      ds('Other income', 4, function (y) { return y.otherIncome; }),
+      ds('Withdrawals', 3, function (y) { return y.withdrawals; }),
       { type: 'line', label: 'Spending', order: 0, borderColor: c.ink, backgroundColor: c.ink, borderWidth: 2, pointRadius: 0, tension: 0.1,
         data: years.map(function (y) { return val(y, y.spending, 'flow', R); }) },
       { type: 'line', label: 'Spending + tax', order: 0, borderColor: ui.cssVar('--critical'), backgroundColor: ui.cssVar('--critical'), borderWidth: 2, borderDash: [5, 4], pointRadius: 0, tension: 0.1,
@@ -250,9 +256,9 @@
       data: {
         labels: labels,
         datasets: [
-          { label: 'Low input', backgroundColor: series(1), borderRadius: 4, borderSkipped: false,
+          { label: 'Low input', backgroundColor: series(1), borderRadius: 0, borderSkipped: false,
             data: t.rows.map(function (r) { return [t.base, r.low]; }) },
-          { label: 'High input', backgroundColor: series(0), borderRadius: 4, borderSkipped: false,
+          { label: 'High input', backgroundColor: series(0), borderRadius: 0, borderSkipped: false,
             data: t.rows.map(function (r) { return [t.base, r.high]; }) }
         ]
       },
@@ -260,7 +266,7 @@
         indexAxis: 'y', animation: false, responsive: true, maintainAspectRatio: false,
         scales: {
           x: { grid: { color: c.grid }, border: { display: false }, ticks: { color: c.muted, callback: function (v) { return m.format(v, t.baseSummary); } } },
-          y: { stacked: true, grid: { display: false }, ticks: { color: c.text, font: { size: 12 } } }
+          y: { stacked: true, grid: { display: false }, ticks: { color: c.text } }
         },
         plugins: {
           legend: legend(c),
@@ -299,9 +305,9 @@
     }
     var datasets = [
       band('90th percentile', b.p90, false, '00'),
-      band('10th–90th', b.p10, '-1', '2e'),
+      band('10th–90th', b.p10, '-1', '3d'),
       band('75th percentile', b.p75, false, '00'),
-      band('25th–75th', b.p25, '-1', '55'),
+      band('25th–75th', b.p25, '-1', '70'),
       { label: 'Median', data: b.p50, borderColor: col, backgroundColor: col, borderWidth: 2.5, pointRadius: 0, tension: 0.2, fill: false }
     ];
     if (deterministic) datasets.push({ label: 'Deterministic plan', data: deterministic, borderColor: c.ink, backgroundColor: c.ink, borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0, fill: false });

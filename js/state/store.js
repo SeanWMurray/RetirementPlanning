@@ -50,7 +50,9 @@
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
       store.doc.meta.modified = new Date().toISOString();
-      store.lastSaved = safeSet(STORAGE_KEY, JSON.stringify(store.doc)) ? new Date() : null;
+      var ok = safeSet(STORAGE_KEY, JSON.stringify(store.doc));
+      store.lastSaved = ok ? new Date() : null;
+      store.saveFailed = !ok;
       emit('saved');
     }, 400);
   }

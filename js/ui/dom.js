@@ -70,7 +70,7 @@
     csv: 'M4 4h16v16H4zM4 10h16M4 15h16M10 4v16'
   };
   ui.icon = function (name, size) {
-    var s = size || 16;
+    var s = size || 14;
     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', '0 0 24 24');
     svg.setAttribute('width', s); svg.setAttribute('height', s);
@@ -124,37 +124,46 @@
   // ---------------------------------------------------------------------------
   // Popup menu positioned at a point
   // ---------------------------------------------------------------------------
-  var openMenu = null;
-  ui.closeMenu = function () { if (openMenu) { openMenu.remove(); openMenu = null; } };
-  ui.menu = function (x, y, items, header) {
+  var openMenu = null, openMenuClose = null;
+  ui.closeMenu = function () {
+    if (openMenu) { openMenu.remove(); openMenu = null; }
+    if (openMenuClose) { var f = openMenuClose; openMenuClose = null; f(); }
+  };
+  /**
+   * items: [{ label, onclick, hint?, checked?, disabled?, swatch? } | { separator: true } | { heading: 'text' }]
+   * opts:  { onClose }
+   */
+  ui.menu = function (x, y, items, header, opts) {
     ui.closeMenu();
     var m = h('div.menu', { role: 'menu' }, header ? h('div.menu-header', header) : null,
       items.map(function (it) {
         if (it.separator) return h('div.menu-sep');
         if (it.heading) return h('div.menu-heading', it.heading);
-        return h('button.menu-item', { type: 'button', role: 'menuitem', disabled: it.disabled, onclick: function () { ui.closeMenu(); it.onclick(); } },
-          it.swatch ? h('span.swatch', { style: { background: it.swatch } }) : null,
+        return h('button.menu-item', { type: 'button', role: it.checked != null ? 'menuitemcheckbox' : 'menuitem', 'aria-checked': it.checked != null ? String(!!it.checked) : null,
+          disabled: it.disabled, onclick: function () { ui.closeMenu(); it.onclick(); } },
+          h('span.menu-check', it.checked ? '\u2713' : (it.swatch ? h('span.swatch', { style: { background: it.swatch } }) : '')),
           h('span.menu-label', it.label), it.hint ? h('span.menu-hint', it.hint) : null);
       }));
     document.body.appendChild(m);
     var r = m.getBoundingClientRect();
-    m.style.left = Math.max(8, Math.min(x, window.innerWidth - r.width - 8)) + 'px';
-    m.style.top = Math.max(8, Math.min(y, window.innerHeight - r.height - 8)) + 'px';
+    m.style.left = Math.max(0, Math.min(x, window.innerWidth - r.width - 4)) + 'px';
+    m.style.top = Math.max(0, Math.min(y, window.innerHeight - r.height - 4)) + 'px';
     openMenu = m;
+    openMenuClose = opts && opts.onClose || null;
     setTimeout(function () {
       document.addEventListener('mousedown', function off(e) {
-        if (!m.contains(e.target)) { ui.closeMenu(); document.removeEventListener('mousedown', off); }
+        if (!m.contains(e.target)) { if (openMenu === m) ui.closeMenu(); document.removeEventListener('mousedown', off); }
       });
     }, 0);
     return m;
   };
+  ui.menuOpen = function () { return !!openMenu; };
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') ui.closeMenu(); });
 
+  /** Transient messages go to the status bar (falls back to the console). */
   ui.toast = function (msg, kind) {
-    var t = h('div.toast' + (kind ? '.toast-' + kind : ''), msg);
-    document.body.appendChild(t);
-    setTimeout(function () { t.classList.add('show'); }, 10);
-    setTimeout(function () { t.classList.remove('show'); setTimeout(function () { t.remove(); }, 300); }, 2600);
+    if (RP.app && RP.app.status) RP.app.status(msg, kind);
+    else console.log(msg);
   };
 
   ui.download = function (filename, text, mime) {

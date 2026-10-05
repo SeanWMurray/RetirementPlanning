@@ -32,7 +32,7 @@
 
   /** Run base + every scenario. Returns [{ id, name, color, visible, result }]. */
   sc.runAll = function (doc) {
-    var out = [{ id: 'base', name: 'Base plan', color: '#2a78d6', visible: true, result: RP.engine.project(sc.effective(doc, 'base')) }];
+    var out = [{ id: 'base', name: 'Base plan', color: '#2f64a8', visible: true, result: RP.engine.project(sc.effective(doc, 'base')) }];
     (doc.scenarios || []).forEach(function (s) {
       out.push({ id: s.id, name: s.name, color: s.color, visible: s.visible !== false, result: RP.engine.project(sc.effective(doc, s.id)) });
     });

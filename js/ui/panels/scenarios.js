@@ -99,7 +99,7 @@
       // --- Scenario cards
       var list = h('div.scenario-list');
       list.appendChild(h('div.scenario-card' + (store.active === 'base' ? '.active' : ''),
-        h('div.scenario-head', h('span.swatch', { style: { background: '#2a78d6' } }), h('b', 'Base plan'),
+        h('div.scenario-head', h('span.swatch', { style: { background: '#2f64a8' } }), h('b', 'Base plan'),
           h('div.btn-row', store.active === 'base' ? h('span.pill', 'Editing') : ui.button('Edit', function () { store.setActive('base'); }, { cls: 'small' }),
             ui.button(null, function () { store.duplicateScenario('base'); }, { icon: 'copy', cls: 'ghost icon-only', aria: 'Duplicate as scenario', title: 'Duplicate as a new scenario' }))),
         h('p.muted', 'Your main plan. Scenarios inherit everything from it except what they override.')));

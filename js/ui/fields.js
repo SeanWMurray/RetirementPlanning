@@ -57,7 +57,7 @@
       var cb = h('input', { type: 'checkbox', 'aria-label': def.label });
       cb.checked = !!value;
       cb.addEventListener('change', function () { onCommit(cb.checked); });
-      return h('label.switch', cb, h('span.slider'));
+      return h('span.check', cb);
     }
 
     if (type === 'textarea') {
@@ -127,8 +127,15 @@
       h('label.field-label', h('span', def.label), reset, def.help ? h('span.help', { tabindex: 0, 'data-tip': def.help }, ui.icon('info', 12)) : null),
       input);
     if (store.isOverridden(def.path)) row.classList.add('overridden');
-    return row;
+    return linkLabel(row);
   };
+
+  /** Clicking a checkbox's label text toggles it, as in native dialogs. */
+  function linkLabel(row) {
+    var cb = row.querySelector('input[type=checkbox]'), lab = row.querySelector('label.field-label');
+    if (cb && lab) { cb.id = U.uid('cb'); lab.htmlFor = cb.id; }
+    return row;
+  }
 
   /** Update override markers without re-rendering inputs (keeps focus). */
   ui.refreshFieldStates = function (root) {
@@ -163,7 +170,7 @@
       var row = h('div.field' + (d.type === 'toggle' ? '.field-toggle' : '') + (d.type === 'text' || d.wide ? '.field-wide' : ''),
         h('label.field-label', h('span', d.label), d.help ? h('span.help', { tabindex: 0, 'data-tip': d.help }, ui.icon('info', 12)) : null),
         ui.input(d, obj[d.key], function (v) { obj[d.key] = v; if (onChange) onChange(obj, d.key); }));
-      return row;
+      return linkLabel(row);
     }));
   };
 
