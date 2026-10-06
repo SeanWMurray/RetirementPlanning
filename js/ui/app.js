@@ -71,7 +71,7 @@
     ];
   } });
   M.register({ id: 'view', label: 'View', items: function () {
-    var st = S().doc.settings, theme = S().ui.theme || 'auto';
+    var st = S().doc.settings, theme = S().ui.theme || 'auto', layout = S().ui.layout || 'auto';
     var items = [
       { label: "Today's Dollars", checked: st.realDollars, onclick: function () { S().updateSettings({ realDollars: true }); } },
       { label: 'Future (Nominal) Dollars', checked: !st.realDollars, onclick: function () { S().updateSettings({ realDollars: false }); } },
@@ -86,6 +86,10 @@
       { label: 'Theme: System', checked: theme === 'auto', onclick: function () { setTheme('auto'); } },
       { label: 'Theme: Light', checked: theme === 'light', onclick: function () { setTheme('light'); } },
       { label: 'Theme: Dark', checked: theme === 'dark', onclick: function () { setTheme('dark'); } },
+      { separator: true },
+      { label: 'Layout: Automatic', checked: layout === 'auto', onclick: function () { setLayout('auto'); } },
+      { label: 'Layout: Desktop', checked: layout === 'desktop', onclick: function () { setLayout('desktop'); } },
+      { label: 'Layout: Phone', checked: layout === 'phone', onclick: function () { setLayout('phone'); } },
       { separator: true }
     ];
     RP.tabs.list().forEach(function (t, i) {
@@ -146,20 +150,60 @@
     app.status('Ready');
     document.addEventListener('keydown', onKey);
     setMobileView(RP.store.ui.mview || 'results', true);
-    if (window.matchMedia) {
-      var mq = window.matchMedia(MOBILE_QUERY);
-      var onChange = function () { document.body.classList.toggle('is-mobile', mq.matches); app.renderTab(); };
-      if (mq.addEventListener) mq.addEventListener('change', onChange); else mq.addListener(onChange);
-      document.body.classList.toggle('is-mobile', mq.matches);
-    }
+    applyLayout();
+    var t;
+    var relayout = function () { clearTimeout(t); t = setTimeout(function () { if (applyLayout()) app.renderTab(); }, 150); };
+    window.addEventListener('resize', relayout);
+    window.addEventListener('load', relayout);
+    window.addEventListener('orientationchange', relayout);
   };
 
   // ---------------------------------------------------------------------------
   // Phone layout: a compact header, one pane at a time (Inputs or Results),
   // and a bottom navigation bar. Desktop layout is unchanged.
   // ---------------------------------------------------------------------------
+  // The phone layout is a body class rather than a CSS media query so it also applies when a
+  // phone lays the page out at desktop width (Chrome's "Desktop site", or an embed in a page
+  // without a mobile viewport tag). View > Layout can force either layout.
   var MOBILE_QUERY = '(max-width: 820px)';
-  app.isMobile = function () { return !!(window.matchMedia && window.matchMedia(MOBILE_QUERY).matches); };
+  function mq(q) { return !!(window.matchMedia && window.matchMedia(q).matches); }
+  /** Shortest side of the physical screen in CSS px, or 0 if unknown. */
+  function screenShort() { var sc = window.screen; return sc && sc.width && sc.height ? Math.min(sc.width, sc.height) : 0; }
+  function isPhoneScreen() { var s = screenShort(); return s > 0 && s <= 600 && mq('(pointer: coarse)'); }
+  function wantMobile() {
+    var pref = RP.store.ui.layout || 'auto';
+    if (pref === 'phone') return true;
+    if (pref === 'desktop') return false;
+    return mq(MOBILE_QUERY) || isPhoneScreen();
+  }
+  app.isMobile = function () { return document.body.classList.contains('is-mobile'); };
+
+  /**
+   * Toggle the phone layout and, when a phone has laid the page out much wider than its screen,
+   * zoom the page so the phone layout fills the screen at a readable size.
+   * Returns true when the layout changed.
+   */
+  function applyLayout() {
+    var root = document.documentElement, was = app.isMobile(), wasZoom = root.style.zoom;
+    var mobile = wantMobile();
+    root.style.zoom = '';
+    var zoom = 1, layoutH = 0;
+    if (mobile && isPhoneScreen()) {
+      var sc = window.screen;
+      var screenW = mq('(orientation: landscape)') ? Math.max(sc.width, sc.height) : Math.min(sc.width, sc.height);
+      var layoutW = root.clientWidth || window.innerWidth;
+      layoutH = root.clientHeight || window.innerHeight;
+      if (screenW > 0 && layoutW > screenW * 1.25) zoom = Math.round(layoutW / screenW * 100) / 100;
+    }
+    if (zoom !== 1) root.style.zoom = String(zoom);
+    root.style.setProperty('--app-h', zoom !== 1 ? (layoutH / zoom) + 'px' : '');
+    document.body.classList.toggle('is-mobile', mobile);
+    return was !== mobile || wasZoom !== root.style.zoom;
+  }
+  function setLayout(v) {
+    RP.store.ui.layout = v; RP.store.saveUi();
+    applyLayout(); app.renderTab();
+  }
 
   function setMobileView(v, initial) {
     document.body.dataset.mview = v;

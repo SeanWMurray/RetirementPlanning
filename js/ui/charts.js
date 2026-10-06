@@ -60,7 +60,7 @@
     };
   }
   function legend(c) {
-    var small = window.matchMedia && window.matchMedia('(max-width: 820px)').matches;
+    var small = !!(RP.app && RP.app.isMobile && RP.app.isMobile());
     return { position: small ? 'bottom' : 'top', align: 'start',
       labels: { color: c.text, boxWidth: small ? 10 : 12, boxHeight: 8, padding: small ? 8 : 12, font: { size: small ? 10 : 11 } } };
   }

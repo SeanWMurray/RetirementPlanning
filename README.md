@@ -44,6 +44,8 @@ The app follows your system's light/dark setting; you can also switch themes und
 
 On a phone the app switches to a mobile layout: results first, a bottom bar to switch between **Inputs** and **Results**, a live summary while you edit, bottom-sheet menus, full-screen dialogs and touch-sized controls.
 
+The phone layout is chosen from the window width and the physical screen size, so it also turns on when a phone lays the page out at desktop width (Chrome's "Desktop site", or an embed in a page without a mobile viewport tag). **View → Layout** forces Desktop or Phone. When hosting, link to `index.html` directly or embed it full-width in a page that has `<meta name="viewport" content="width=device-width, initial-scale=1">`.
+
 | Results | Inputs |
 |---|---|
 | <img src="docs/screenshots/mobile-light-results.png" width="240" alt="Phone: results"> | <img src="docs/screenshots/mobile-light-inputs.png" width="240" alt="Phone: inputs"> |
