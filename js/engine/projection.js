@@ -22,6 +22,10 @@
  *   - Cash/HISA growth is treated as interest, taxed annually.
  *   - RRSP is converted to a RRIF with minimum withdrawals from age 72 (if enabled).
  *   - Tax thresholds are indexed with the plan's inflation rate.
+ *   - Couples (plan.spouse.enabled): each person has their own salary, CPP/OAS, accounts (account.owner),
+ *     RRSP room, RRIF minimums and tax return; spending, the timeline and the retirement phase are the
+ *     household's, keyed to your age. Eligible pension income can be split (up to 50%) to lower the
+ *     household's tax. Survivorship (one partner dying first) is not modelled.
  *
  * opts:
  *   returnShocks: number[] — per-year deviation added to market returns (Monte Carlo)
@@ -86,6 +90,71 @@
     return g == null || g === '' ? inf : num(g);
   };
 
+  /** Element p of an optional per-person array. */
+  function at(arr, p) { return arr ? arr[p] || 0 : 0; }
+
+  /** Pension income that can be split with a spouse: pension-type income at any age, RRIF/RRSP income at 65+. */
+  function splittable(inc, age) { return num(inc.pension) + (age >= 65 ? num(inc.rrif) : 0); }
+
+  /** Rough net income, used only to aim the pension split. */
+  function roughNet(inc) {
+    return num(inc.employment) + num(inc.other) + num(inc.pension) + num(inc.rrif) + num(inc.cpp) + num(inc.oas) +
+      num(inc.capitalGains) + num(inc.dividends) * 1.38 - num(inc.rrspDeduction);
+  }
+
+  /**
+   * Move `s` of eligible pension income between spouses (s > 0: you → spouse; s < 0: spouse → you).
+   * The moved amount keeps its character: the defined-benefit part stays pension-credit eligible at any
+   * age, the RRIF part only if the receiving spouse is 65+ (as on the T1032 election).
+   */
+  function movePension(incs, ctxs, s) {
+    if (!s) return incs;
+    var from = s > 0 ? 0 : 1, to = 1 - from, amt = Math.abs(s);
+    var E = splittable(incs[from], ctxs[from].age);
+    var pensionShare = E > 0 ? num(incs[from].pension) / E : 1;
+    var out = [Object.assign({}, incs[0]), Object.assign({}, incs[1])];
+    out[from].pension = num(out[from].pension) - amt * pensionShare; out[from].rrif = num(out[from].rrif) - amt * (1 - pensionShare);
+    out[to].pension = num(out[to].pension) + amt * pensionShare; out[to].rrif = num(out[to].rrif) + amt * (1 - pensionShare);
+    return out;
+  }
+
+  /**
+   * Household tax for a couple: each person files their own return. With `splitting`, up to half of
+   * either spouse's eligible pension income is allocated to the other. The split is chosen by checking
+   * a few candidates (none, the maximums, halfway, and the split that evens out the two incomes), then
+   * refining around the best with a short golden-section search. Total tax is piecewise linear in the
+   * split, so this lands on (or within a few dollars of) the lowest combined tax.
+   */
+  engine.householdTax = function (incs, ctxs, splitting) {
+    var cache = {};
+    function evaluate(s) {
+      var key = Math.round(s * 100);
+      if (cache[key]) return cache[key];
+      var m = movePension(incs, ctxs, s);
+      var r0 = RP.tax.compute(m[0], ctxs[0]), r1 = RP.tax.compute(m[1], ctxs[1]);
+      return (cache[key] = { totalWithPayroll: r0.totalWithPayroll + r1.totalWithPayroll, people: [r0, r1], incs: m, split: s });
+    }
+    var none = evaluate(0);
+    if (!splitting) return none;
+    var hi = 0.5 * splittable(incs[0], ctxs[0].age), lo = -0.5 * splittable(incs[1], ctxs[1].age);
+    if (hi - lo < 1) return none;
+    var even = RP.util.clamp((roughNet(incs[0]) - roughNet(incs[1])) / 2, lo, hi);
+    var pts = [lo, lo / 2, 0, even, hi / 2, hi].sort(function (a, b) { return a - b; })
+      .filter(function (v, i, arr) { return i === 0 || v - arr[i - 1] > 1; });
+    var best = none;
+    pts.forEach(function (sp) { var c = evaluate(sp); if (c.totalWithPayroll < best.totalWithPayroll - 0.005) best = c; });
+    var bi = pts.indexOf(best.split);
+    if (bi < 0) bi = pts.indexOf(0);
+    var a = pts[Math.max(0, bi - 1)], b = pts[Math.min(pts.length - 1, bi + 1)];
+    var g = 0.381966, x1 = a + g * (b - a), x2 = b - g * (b - a), f1 = evaluate(x1), f2 = evaluate(x2);
+    for (var k = 0; k < 10 && b - a > 20; k++) {
+      if (f1.totalWithPayroll <= f2.totalWithPayroll) { b = x2; x2 = x1; f2 = f1; x1 = a + g * (b - a); f1 = evaluate(x1); }
+      else { a = x1; x1 = x2; f1 = f2; x2 = b - g * (b - a); f2 = evaluate(x2); }
+    }
+    [f1, f2].forEach(function (c) { if (c.totalWithPayroll < best.totalWithPayroll - 0.005) best = c; });
+    return best;
+  };
+
   /** Prior-year earned income used for the first year's RRSP room estimate. */
   function salary0Initial(plan) {
     return num(plan.income.salary) / (1 + num(plan.income.growth));
@@ -104,13 +173,21 @@
     var startYear = Math.round(num(prof.startYear, new Date().getFullYear()));
     var cgInc = d.capitalGainsInclusion == null ? 0.5 : d.capitalGainsInclusion;
 
+    // Couple: person 0 is you, person 1 your spouse/partner.
+    var SP = plan.spouse || {};
+    var couple = !!SP.enabled;
+    var spAge0 = Math.round(num(SP.currentAge, startAge));
+    var spRetAge = Math.round(num(SP.retirementAge, retAge));
+    var spSalary0 = couple ? num(SP.salary) : 0, spGrowth = num(SP.growth);
+    var splitting = couple && plan.tax.pensionSplitting !== false;
+
     var savingsMode = RP.savingsModes.get(plan.savings.mode) || RP.savingsModes.get('surplus');
     var strategy = RP.withdrawalStrategies.get(plan.retirement.strategy) || RP.withdrawalStrategies.get('needs');
 
     // Account state
     var accts = (plan.accounts || []).map(function (a) {
       return {
-        id: a.id, name: a.name, type: a.type,
+        id: a.id, name: a.name, type: a.type, owner: couple && a.owner === 'spouse' ? 1 : 0,
         bal: Math.max(0, num(a.balance)),
         acb: a.type === 'nonreg' ? Math.max(0, num(a.costBase, num(a.balance))) : 0,
         returnRate: a.returnRate === '' || a.returnRate == null ? null : num(a.returnRate),
@@ -124,7 +201,7 @@
     });
     var enforceRoom = plan.savings.enforceRoom !== false;
     var limits = d.limits || {};
-    var prevEmployment = salary0Initial(plan);
+    var prevEmp = [salary0Initial(plan), spSalary0 / (1 + spGrowth)];   // last year's employment income, per person
     var byId = {};
     accts.forEach(function (a) { byId[a.id] = a; });
     function ordered(list) {
@@ -152,10 +229,11 @@
       var cpi = Math.pow(1 + inf, t);
       var taxIdx = plan.tax.indexBrackets === false ? 1 : Math.pow(1 + inf, year - d.year);
       var retired = age >= retAge;
+      var ages = [age, spAge0 + t];
 
       var y = {
         t: t, age: age, year: year, cpi: cpi, cpiEnd: cpi * (1 + inf), retired: retired,
-        mods: { income: 1, spending: 1, savings: 1, incomeAdd: 0, spendingAdd: 0, savingsAdd: 0, returnOverride: null, returnDelta: 0, contrib: {} },
+        mods: { income: 1, spending: 1, savings: 1, incomeAdd: 0, spendingAdd: 0, savingsAdd: 0, spouseIncome: 1, spouseIncomeAdd: 0, returnOverride: null, returnDelta: 0, contrib: {} },
         extraIncome: [], extraExpenses: [], activeEvents: []
       };
 
@@ -168,22 +246,33 @@
 
       // 2. Income
       // Dollar adjustments join the salary first, so percentage adjustments (e.g. a sabbatical) scale them too.
-      y.employment = retired ? 0 : Math.max(0, (salary0 * Math.pow(1 + growth, t) + y.mods.incomeAdd) * y.mods.income);
-      var B = plan.benefits;
-      var cppStart = RP.util.clamp(Math.round(num(B.cppStartAge, 65)), 60, 70);
-      var oasStart = RP.util.clamp(Math.round(num(B.oasStartAge, 65)), 65, 70);
+      var emp = [
+        retired ? 0 : Math.max(0, (salary0 * Math.pow(1 + growth, t) + y.mods.incomeAdd) * y.mods.income),
+        couple && ages[1] < spRetAge ? Math.max(0, (spSalary0 * Math.pow(1 + spGrowth, t) + y.mods.spouseIncomeAdd) * y.mods.spouseIncome) : 0
+      ];
+      y.employment = emp[0] + emp[1];
       var oasIdx = Math.pow(1 + inf, year - d.year);   // OAS is CPI-indexed whether or not tax brackets are
-      y.cpp = B.cppEnabled && age >= cppStart ? num(B.cppAt65) * cpi * cppFactor(cppStart, d) : 0;
-      y.oas = B.oasEnabled && age >= oasStart
-        ? d.oas.maxAnnual65 * oasIdx * RP.util.clamp(num(B.oasResidency, 1), 0, 1) * oasFactor(oasStart, d) * (age >= 75 ? 1 + d.oas.age75Boost : 1)
-        : 0;
-      var exOther = 0, exPension = 0, exNonTax = 0;
+      var benefitsFor = function (B, a) {
+        var cppStart = RP.util.clamp(Math.round(num(B.cppStartAge, 65)), 60, 70);
+        var oasStart = RP.util.clamp(Math.round(num(B.oasStartAge, 65)), 65, 70);
+        return {
+          cpp: B.cppEnabled && a >= cppStart ? num(B.cppAt65) * cpi * cppFactor(cppStart, d) : 0,
+          oas: B.oasEnabled && a >= oasStart
+            ? d.oas.maxAnnual65 * oasIdx * RP.util.clamp(num(B.oasResidency, 1), 0, 1) * oasFactor(oasStart, d) * (a >= 75 ? 1 + d.oas.age75Boost : 1)
+            : 0
+        };
+      };
+      var ben = [benefitsFor(plan.benefits, ages[0]), couple ? benefitsFor(SP, ages[1]) : { cpp: 0, oas: 0 }];
+      y.cpp = ben[0].cpp + ben[1].cpp;
+      y.oas = ben[0].oas + ben[1].oas;
+      var exOther = [0, 0], exPension = [0, 0], exNonTax = 0;
       y.extraIncome.forEach(function (x) {
-        if (x.taxType === 'pension') exPension += x.amount;
+        var p = couple && x.owner === 'spouse' ? 1 : 0;
+        if (x.taxType === 'pension') exPension[p] += x.amount;
         else if (x.taxType === 'nontaxable') exNonTax += x.amount;
-        else exOther += x.amount;
+        else exOther[p] += x.amount;
       });
-      y.otherIncome = exOther + exPension + exNonTax;
+      y.otherIncome = exOther[0] + exOther[1] + exPension[0] + exPension[1] + exNonTax;
 
       // Registered contribution room (RRSP / TFSA) available this year
       accts.forEach(function (a) {
@@ -192,7 +281,7 @@
           if (t === 0) a.room = a.startingRoom != null ? a.startingRoom : newRoom;
           else a.room += newRoom + a.wPrev;          // withdrawals are re-added the following year
         } else if (a.type === 'rrsp') {
-          var earned = Math.min(num(limits.rrspPct, 0.18) * prevEmployment, engine.rrspMax(year, d, inf));
+          var earned = Math.min(num(limits.rrspPct, 0.18) * prevEmp[a.owner], engine.rrspMax(year, d, inf));
           if (t === 0) a.room = a.startingRoom != null ? a.startingRoom : earned;
           else a.room += earned;
         }
@@ -240,49 +329,63 @@
       });
 
       // Interest on cash accounts is taxable annually (stays in the account).
-      var interest = 0;
-      accts.forEach(function (a) { if (a.type === 'cash' && a.r > 0) interest += a.start * a.r; });
+      var interestBy = [0, 0];
+      accts.forEach(function (a) { if (a.type === 'cash' && a.r > 0) interestBy[a.owner] += a.start * a.r; });
+      var interest = interestBy[0] + interestBy[1];
 
       // Non-registered distributions (dividends, interest, capital-gain distributions) are part of the
       // account's total return, taxed in the year received and reinvested (which adds to the cost base).
-      var distInterest = 0, distDividends = 0, distGains = 0;
+      var distI = [0, 0], distD = [0, 0], distG = [0, 0];
       accts.forEach(function (a) {
         a.dist = a.distYield > 0 ? a.start * a.distYield : 0;
         if (!a.dist) return;
         var mix = DIST_MIX[a.distType] || DIST_MIX.mix;
-        distInterest += a.dist * mix.interest; distDividends += a.dist * mix.dividends; distGains += a.dist * mix.gains;
+        distI[a.owner] += a.dist * mix.interest; distD[a.owner] += a.dist * mix.dividends; distG[a.owner] += a.dist * mix.gains;
       });
+      var distInterest = distI[0] + distI[1], distDividends = distD[0] + distD[1], distGains = distG[0] + distG[1];
 
       // RRIF minimum
-      var rrifMin = 0;
-      if (plan.retirement.rrifMinimums !== false && age >= 72) {
+      // RRIF minimums, by the account owner's age
+      var rrifBy = [0, 0];
+      if (plan.retirement.rrifMinimums !== false) {
         accts.forEach(function (a) {
-          if (a.type === 'rrsp') {
-            var m = Math.min(a.bal, a.bal * rrifFactor(age, d));
-            a.w += m; rrifMin += m;
+          if (a.type === 'rrsp' && ages[a.owner] >= 72) {
+            var m = Math.min(a.bal, a.bal * rrifFactor(ages[a.owner], d));
+            a.w += m; rrifBy[a.owner] += m;
           }
         });
       }
+      var rrifMin = rrifBy[0] + rrifBy[1];
 
-      var taxCtx = { age: age, province: prof.province, data: d, index: taxIdx, settings: plan.tax };
-      var inc0 = {
-        employment: y.employment, other: exOther + interest + distInterest, pension: exPension,
-        cpp: y.cpp, oas: y.oas, rrif: rrifMin, capitalGains: distGains * cgInc, dividends: distDividends, rrspDeduction: 0
-      };
-      var cashIn = y.employment + y.cpp + y.oas + exOther + exPension + exNonTax + rrifMin;
-
-      function taxWith(extra) {
-        var inc = {
-          employment: inc0.employment, other: inc0.other, pension: inc0.pension, cpp: inc0.cpp, oas: inc0.oas,
-          rrif: inc0.rrif + (extra.rrif || 0), capitalGains: inc0.capitalGains + (extra.capitalGains || 0),
-          dividends: inc0.dividends, rrspDeduction: extra.rrspDeduction || 0
+      var taxCtxs = [0, 1].map(function (p) { return { age: ages[p], province: prof.province, data: d, index: taxIdx, settings: plan.tax }; });
+      var inc0 = [0, 1].map(function (p) {
+        return {
+          employment: emp[p], other: exOther[p] + interestBy[p] + distI[p], pension: exPension[p],
+          cpp: ben[p].cpp, oas: ben[p].oas, rrif: rrifBy[p], capitalGains: distG[p] * cgInc, dividends: distD[p], rrspDeduction: 0
         };
-        return RP.tax.compute(inc, taxCtx);
+      });
+      var cashIn = y.employment + y.cpp + y.oas + exOther[0] + exOther[1] + exPension[0] + exPension[1] + exNonTax + rrifMin;
+
+      // Tax for the household. `extra` holds per-person arrays [you, spouse] of rrif, capitalGains and
+      // rrspDeduction on top of the year's base income. Returns { totalWithPayroll, people, incs, split }.
+      function taxWith(extra) {
+        var incs = inc0.map(function (b, p) {
+          return {
+            employment: b.employment, other: b.other, pension: b.pension, cpp: b.cpp, oas: b.oas,
+            rrif: b.rrif + at(extra.rrif, p), capitalGains: b.capitalGains + at(extra.capitalGains, p),
+            dividends: b.dividends, rrspDeduction: at(extra.rrspDeduction, p)
+          };
+        });
+        if (!couple) {
+          var one = RP.tax.compute(incs[0], taxCtxs[0]);
+          return { totalWithPayroll: one.totalWithPayroll, people: [one], incs: incs, split: 0 };
+        }
+        return engine.householdTax(incs, taxCtxs, splitting);
       }
 
       // How much each account can take this year: limit mode (or a contribution event), capped by room.
       function capacity(a, allowRRSP) {
-        if (a.type === 'rrsp' && (!allowRRSP || age > 71)) return 0;   // no RRSP contributions after 71
+        if (a.type === 'rrsp' && (!allowRRSP || ages[a.owner] > 71)) return 0;   // no RRSP contributions after 71
         var ov = y.mods.contrib[a.id];
         var mode = ov ? ov.mode : a.limitMode;
         var amt;
@@ -296,12 +399,12 @@
 
       // Allocate contribution C across accounts in contribution order. Anything no account can take stays unallocated.
       function allocate(C, allowRRSP) {
-        var res = { map: {}, rrsp: 0, total: 0 };
+        var res = { map: {}, rrsp: 0, rrspBy: [0, 0], total: 0 };
         var left = C;
         for (var i = 0; i < contribOrder.length && left > 0.005; i++) {
           var a = contribOrder[i];
           var amt = Math.min(left, capacity(a, allowRRSP));
-          if (amt > 0) { res.map[a.id] = amt; left -= amt; res.total += amt; if (a.type === 'rrsp') res.rrsp += amt; }
+          if (amt > 0) { res.map[a.id] = amt; left -= amt; res.total += amt; if (a.type === 'rrsp') { res.rrsp += amt; res.rrspBy[a.owner] += amt; } }
         }
         return res;
       }
@@ -313,7 +416,7 @@
 
       // Draw gross G from accounts in withdrawal order. Returns taxable pieces.
       function draws(G) {
-        var res = { map: {}, rrif: 0, capitalGains: 0, total: 0 };
+        var res = { map: {}, rrif: 0, capitalGains: 0, rrifBy: [0, 0], cgBy: [0, 0], total: 0 };
         var left = G;
         for (var i = 0; i < withdrawOrder.length && left > 0.005; i++) {
           var a = withdrawOrder[i];
@@ -321,8 +424,11 @@
           var amt = Math.min(left, avail);
           if (amt <= 0) continue;
           res.map[a.id] = amt; left -= amt; res.total += amt;
-          if (a.type === 'rrsp') res.rrif += amt;
-          else if (a.type === 'nonreg' && a.start > 0) res.capitalGains += amt * Math.max(0, 1 - a.acb / a.start) * cgInc;
+          if (a.type === 'rrsp') { res.rrif += amt; res.rrifBy[a.owner] += amt; }
+          else if (a.type === 'nonreg' && a.start > 0) {
+            var g = amt * Math.max(0, 1 - a.acb / a.start) * cgInc;
+            res.capitalGains += g; res.cgBy[a.owner] += g;
+          }
         }
         return res;
       }
@@ -335,7 +441,7 @@
       // Solve for gross withdrawal giving net cash `need` (after the extra tax it causes).
       function solveWithdrawal(need, baseTax) {
         var maxG = available();
-        function net(G) { var dr = draws(G); return { n: G - (taxWith(dr).totalWithPayroll - baseTax), dr: dr }; }
+        function net(G) { var dr = draws(G); return { n: G - (taxWith({ rrif: dr.rrifBy, capitalGains: dr.cgBy }).totalWithPayroll - baseTax), dr: dr }; }
         var top = net(maxG);
         if (top.n <= need + 0.5) return { dr: top.dr, shortfall: Math.max(0, need - top.n) };
         var G = Math.min(maxG, need / 0.75), prevG = 0, prevN = 0, cur;
@@ -351,7 +457,7 @@
         return { dr: cur.dr, shortfall: 0 };
       }
 
-      var contrib = { map: {}, rrsp: 0 }, wd = { map: {}, rrif: 0, capitalGains: 0, total: 0 };
+      var contrib = { map: {}, rrsp: 0, rrspBy: [0, 0] }, wd = { map: {}, rrif: 0, capitalGains: 0, rrifBy: [0, 0], cgBy: [0, 0], total: 0 };
       var taxRes, C = 0, unallocated = 0, shortfall = 0;
       var target = retired ? strategy.grossTarget(y, plan, { state: stratState, startTotal: startTotal }) : savingsMode.target(y, plan);
       if (!retired && target != null && y.mods.savingsAdd) target = Math.max(0, target + y.mods.savingsAdd);
@@ -361,7 +467,7 @@
         var cap = Math.min(target == null ? Infinity : Math.max(0, target), totalCapacity(true));
         var X = function (Cc) {
           var al = allocate(Cc, true);
-          var tr = taxWith({ rrspDeduction: al.rrsp });
+          var tr = taxWith({ rrspDeduction: al.rrspBy });
           return { x: cashIn - tr.totalWithPayroll - y.spending, al: al, tr: tr };
         };
         var r0 = X(0);
@@ -383,7 +489,7 @@
           // Deficit: draw from savings (C is 0 here).
           var sol = solveWithdrawal(-leftover, taxRes.totalWithPayroll);
           wd = sol.dr;
-          taxRes = taxWith({ rrspDeduction: contrib.rrsp, rrif: wd.rrif, capitalGains: wd.capitalGains });
+          taxRes = taxWith({ rrspDeduction: contrib.rrspBy, rrif: wd.rrifBy, capitalGains: wd.cgBy });
           // Reconcile against the final tax so cash always balances (covers any solver tolerance).
           var after = cashIn + wd.total - taxRes.totalWithPayroll - y.spending - C;
           if (after < -0.5) shortfall = -after; else unallocated = Math.max(0, after);
@@ -403,7 +509,7 @@
           var extraG = Math.max(0, target - rrifMin);
           wd = draws(extraG);
         }
-        taxRes = taxWith({ rrif: wd.rrif, capitalGains: wd.capitalGains });
+        taxRes = taxWith({ rrif: wd.rrifBy, capitalGains: wd.cgBy });
         var cashNet = cashIn + wd.total - taxRes.totalWithPayroll - y.spending;
         if (cashNet > 0.5) {
           contrib = allocate(cashNet, false);   // reinvest surplus outside the RRSP
@@ -433,7 +539,7 @@
         a.wPrev = a.type === 'tfsa' ? w : 0;
         endTotal += a.bal;
       });
-      prevEmployment = y.employment;
+      prevEmp = emp;
 
       // 6. Record
       var totalW = rrifMin + wd.total;
@@ -443,18 +549,23 @@
       }
       var balances = {}, contribs = {}, withdrawals = {}, room = {};
       accts.forEach(function (a) { balances[a.id] = a.bal; contribs[a.id] = a.cTotal; withdrawals[a.id] = a.wTotal; if (a.room != null) room[a.id] = a.room; });
+      var people = taxRes.people;
+      function sumP(f) { return people.reduce(function (s2, r) { return s2 + f(r); }, 0); }
       years.push({
         t: t, age: age, year: year, cpi: cpi, cpiEnd: y.cpiEnd, retired: retired,
+        spouseAge: couple ? ages[1] : null,
         employment: y.employment, cpp: y.cpp, oas: y.oas, otherIncome: y.otherIncome, interest: interest,
         incomeTotal: y.employment + y.cpp + y.oas + y.otherIncome,
         spendingBase: y.spendingBase, eventExpenses: y.eventExpenses, spending: y.spending,
         extraIncome: y.extraIncome, extraExpenses: y.extraExpenses,
-        tax: taxRes.totalWithPayroll, incomeTax: taxRes.incomeTax, payroll: taxRes.payroll.total,
-        oasClawback: taxRes.oasClawback, taxDetail: taxRes,
-        taxInputs: { employment: y.employment, other: exOther + interest + distInterest, pension: exPension, cpp: y.cpp, oas: y.oas,
-          rrif: rrifMin + wd.rrif, capitalGains: inc0.capitalGains + wd.capitalGains, dividends: distDividends, rrspDeduction: contrib.rrsp },
+        tax: taxRes.totalWithPayroll, incomeTax: sumP(function (r) { return r.incomeTax; }), payroll: sumP(function (r) { return r.payroll.total; }),
+        oasClawback: sumP(function (r) { return r.oasClawback; }), grossIncome: sumP(function (r) { return r.grossIncome; }),
+        federalTax: sumP(function (r) { return r.federal; }), provincialTax: sumP(function (r) { return r.provincial; }),
+        // Per-person tax: [0] is you, [1] your spouse (couples only). taxDetail/taxInputs/taxCtx are yours.
+        taxDetail: people[0], taxInputs: taxRes.incs[0], taxCtx: taxCtxs[0],
+        taxPeople: couple ? [0, 1].map(function (p) { return { detail: people[p], inputs: taxRes.incs[p], ctx: taxCtxs[p] }; }) : null,
+        pensionSplit: taxRes.split,
         distributions: distInterest + distDividends + distGains, realizedGains: wd.capitalGains,
-        taxCtx: taxCtx,
         contributions: C, contribByAccount: contribs, roomByAccount: room, rrspContribution: contrib.rrsp,
         withdrawals: totalW, withdrawByAccount: withdrawals, rrifMin: rrifMin,
         unallocated: unallocated, shortfall: shortfall, growth: growthAmt,

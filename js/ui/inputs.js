@@ -42,6 +42,55 @@
   });
 
   // ---------------------------------------------------------------------------
+  function spouseName(p) { return (p.spouse && p.spouse.name) || 'Spouse'; }
+  function hasSpouse(p) { return !!(p.spouse && p.spouse.enabled); }
+
+  sections.register({
+    id: 'spouse', title: 'Spouse / partner',
+    summary: function (p) {
+      var sp = p.spouse || {};
+      if (!sp.enabled) return 'Single';
+      return spouseName(p) + ' · age ' + sp.currentAge + ' → retire ' + sp.retirementAge + ' · ' + fmt.money(sp.salary) + '/yr';
+    },
+    render: function (p) {
+      var sp = p.spouse || {};
+      var wrap = h('div', ui.fields([{ path: 'spouse.enabled', label: 'Plan for a couple', type: 'toggle', wide: true }]));
+      if (!sp.enabled) {
+        wrap.appendChild(note('Add a spouse or partner with their own salary, CPP/OAS, accounts and tax return. Spending stays household spending.'));
+        return wrap;
+      }
+      wrap.appendChild(ui.fields([
+        { path: 'spouse.name', label: 'Name', type: 'text' },
+        { path: 'spouse.currentAge', label: 'Current age', type: 'age', min: 16, max: 110 },
+        { path: 'spouse.retirementAge', label: 'Retirement age', type: 'age', min: 16, max: 110, help: 'Their salary stops at this age (their own age).' },
+        { path: 'spouse.salary', label: 'Gross salary (before tax)', type: 'money', min: 0 },
+        { path: 'spouse.growth', label: 'Annual raise (nominal)', type: 'percent' },
+        { path: 'spouse.cppEnabled', label: 'Include CPP / QPP', type: 'toggle', wide: true },
+        sp.cppEnabled ? { path: 'spouse.cppAt65', label: "CPP at 65 (annual, today's $)", type: 'money' } : null,
+        sp.cppEnabled ? { path: 'spouse.cppStartAge', label: 'CPP start age', type: 'age', min: 60, max: 70 } : null,
+        { path: 'spouse.oasEnabled', label: 'Include OAS', type: 'toggle', wide: true },
+        sp.oasEnabled ? { path: 'spouse.oasStartAge', label: 'OAS start age', type: 'age', min: 65, max: 70 } : null,
+        sp.oasEnabled ? { path: 'spouse.oasResidency', label: 'OAS residency fraction', type: 'percent', min: 0, max: 1 } : null,
+        { path: 'tax.pensionSplitting', label: 'Split eligible pension income', type: 'toggle', wide: true,
+          help: 'Each year, allocate up to half of either spouse’s eligible pension income (RRIF/RRSP income from 65, defined-benefit pension at any age) to the other when it lowers the household’s tax.' }
+      ]));
+      var owned = p.accounts.some(function (a) { return a.owner === 'spouse'; });
+      if (!owned) {
+        wrap.appendChild(h('div.btn-row', ui.button('Add RRSP and TFSA for ' + spouseName(p), function () {
+          var arr = U.clone(store().get('accounts'));
+          var n = spouseName(p);
+          var r = { id: U.uid('acct'), name: n + ' RRSP', type: 'rrsp', owner: 'spouse', balance: 0, contribLimit: 'legal', contributionCap: null, startingRoom: null, returnRate: null };
+          var t = { id: U.uid('acct'), name: n + ' TFSA', type: 'tfsa', owner: 'spouse', balance: 0, contribLimit: 'legal', contributionCap: null, startingRoom: null, returnRate: null };
+          arr.push(r, t);
+          store().set('accounts', arr, { structural: true });   // new accounts join the end of both orders
+        }, { icon: 'plus', cls: 'ghost small' })));
+      }
+      wrap.appendChild(note('Ages in events and the table are your age. Each account belongs to one of you (set under Accounts & balances); RRSP room, RRIF minimums and tax follow the owner. Not modelled: survivor benefits and what happens when one spouse dies.'));
+      return wrap;
+    }
+  });
+
+  // ---------------------------------------------------------------------------
   sections.register({
     id: 'spending', title: 'Spending',
     summary: function (p) {
@@ -143,6 +192,8 @@
         var defs = [
           { path: base + 'name', label: 'Name', type: 'text' },
           { path: base + 'type', label: 'Type', type: 'select', options: RP.schema.ACCOUNT_TYPES },
+          hasSpouse(p) ? { path: base + 'owner', label: 'Owner', type: 'select', options: [{ value: 'self', label: 'You' }, { value: 'spouse', label: spouseName(p) }],
+            help: 'Withdrawals, RRSP deductions and room, RRIF minimums and investment income are taxed on the owner’s return.' } : null,
           { path: base + 'balance', label: 'Current balance', type: 'money', min: 0 },
           { path: base + 'contribLimit', label: 'Contributions', type: 'select', options: limitOptions(a),
             help: registered ? 'Up to contribution room: the engine tracks your ' + a.type.toUpperCase() + ' room each year (' + (a.type === 'tfsa' ? 'annual limit indexed in $500 steps, unused room carries forward, withdrawals are re-added the next year' : '18% of last year’s earned income up to the indexed maximum; no contributions after 71') + ').' : 'How much of your savings this account can take each year. Savings fill accounts in the contribution order (Savings section).' },
@@ -159,6 +210,7 @@
         ];
         wrap.appendChild(h('div.account-card',
           h('div.account-head', h('span.badge.badge-' + a.type, a.type.toUpperCase()), h('b', a.name),
+            hasSpouse(p) && a.owner === 'spouse' ? h('span.muted', spouseName(p)) : null,
             ui.button(null, function () {
               ui.confirm('Remove account', 'Remove "' + a.name + '"? Its balance will be dropped from the plan.', function () {
                 var arr = U.clone(store().get('accounts')); arr.splice(i, 1);

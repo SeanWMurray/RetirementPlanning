@@ -106,6 +106,7 @@
       { key: 'amount', label: 'Annual amount', type: 'money' },
       rangeFields[0], rangeFields[1],
       { key: 'taxType', label: 'Tax treatment', type: 'select', options: TAX_TYPES },
+      ownerField(),
       { key: 'indexed', label: "In today's dollars (inflation-indexed)", type: 'toggle' }
     ],
     defaults: function (age, plan) {
@@ -119,7 +120,7 @@
     isActive: function (ev, age) { return inRange(ev, age); },
     summary: function (ev) { return fmt.money(num(ev.amount)) + '/yr, ' + ageRangeText(ev); },
     apply: function (ev, y, ctx) {
-      if (inRange(ev, ctx.age)) y.extraIncome.push({ id: ev.id, label: ev.label || 'Income', amount: amountAt(ev, ctx), taxType: ev.taxType || 'other' });
+      if (inRange(ev, ctx.age)) y.extraIncome.push({ id: ev.id, label: ev.label || 'Income', amount: amountAt(ev, ctx), taxType: ev.taxType || 'other', owner: ev.owner === 'spouse' ? 'spouse' : 'self' });
     }
   });
 
@@ -134,6 +135,7 @@
       { key: 'amount', label: 'Amount', type: 'money' },
       { key: 'startAge', label: 'At age', type: 'age' },
       { key: 'taxType', label: 'Tax treatment', type: 'select', options: TAX_TYPES },
+      ownerField(),
       { key: 'indexed', label: "In today's dollars (inflation-indexed)", type: 'toggle' }
     ],
     defaults: function (age) { return { label: 'Inheritance', amount: 100000, startAge: age, taxType: 'nontaxable', indexed: true }; },
@@ -144,7 +146,7 @@
     isActive: function (ev, age) { return age === num(ev.startAge); },
     summary: function (ev) { return fmt.money(num(ev.amount)) + ' at age ' + num(ev.startAge); },
     apply: function (ev, y, ctx) {
-      if (ctx.age === num(ev.startAge)) y.extraIncome.push({ id: ev.id, label: ev.label || 'Lump sum', amount: amountAt(ev, ctx), taxType: ev.taxType || 'nontaxable' });
+      if (ctx.age === num(ev.startAge)) y.extraIncome.push({ id: ev.id, label: ev.label || 'Lump sum', amount: amountAt(ev, ctx), taxType: ev.taxType || 'nontaxable', owner: ev.owner === 'spouse' ? 'spouse' : 'self' });
     }
   });
 
@@ -164,6 +166,7 @@
     fields: [
       { key: 'label', label: 'Name', type: 'text' },
       { key: 'target', label: 'Applies to', type: 'select', options: TARGETS },
+      ownerField(function (e) { return e.target === 'income'; }),
       { key: 'kind', label: 'Kind', type: 'select', options: [
         { value: 'step', label: 'Temporary — only during the ages chosen' },
         { value: 'growth', label: 'Permanent — a raise/cut that stays afterwards' }
@@ -202,6 +205,7 @@
     },
     apply: function (ev, y, ctx) {
       var key = ev.target === 'income' || ev.target === 'savings' ? ev.target : 'spending';
+      if (key === 'income' && ev.owner === 'spouse') key = 'spouseIncome';   // ignored unless the plan has a spouse
       var p = ctx.persist;
       if (isDollars(ev)) {
         // Dollar adjustments add to the baseline (before percentage adjustments are applied).
@@ -210,6 +214,7 @@
           // A permanent raise/cut: keeps growing like the baseline it is part of.
           var inf = num(ctx.plan.assumptions.inflation);
           var rate = key === 'income' ? num(ctx.plan.income.growth)
+            : key === 'spouseIncome' ? num(ctx.plan.spouse && ctx.plan.spouse.growth)
             : key === 'spending' ? RP.engine.spendingGrowth(ctx.plan.spending, ctx.age >= num(ctx.plan.profile.retirementAge), inf)
             : inf;
           p.level = p.level == null ? 0 : p.level * (1 + rate);
@@ -306,6 +311,23 @@
       y.mods.contrib[ev.accountId] = { mode: ev.mode || 'custom', amount: num(ev.amount) };
     }
   });
+
+  /** Couples: whose income an event belongs to (shown only when the plan has a spouse). */
+  function hasSpouse() {
+    var plan = RP.store ? RP.store.effective() : null;
+    return !!(plan && plan.spouse && plan.spouse.enabled);
+  }
+  function ownerOptions() {
+    var plan = RP.store ? RP.store.effective() : null;
+    var name = plan && plan.spouse && plan.spouse.name ? plan.spouse.name : 'Spouse';
+    return [{ value: 'self', label: 'You' }, { value: 'spouse', label: name }];
+  }
+  function ownerField(when) {
+    return { key: 'owner', label: 'Whose income', type: 'select', options: ownerOptions,
+      help: 'Taxed on this person’s return. Ages are still your age.',
+      showIf: function (e) { return hasSpouse() && (!when || when(e)); } };
+  }
+  RP.events.OWNERS = ['self', 'spouse'];
 
   /** Build a new event of `typeId` at `age`, optionally applying a preset. */
   RP.events.create = function (typeId, age, plan, preset) {

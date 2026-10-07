@@ -14,6 +14,8 @@
   function c(def) { cols.register(def); }
   c({ id: 'age', label: 'Age', group: 'Timeline', kind: 'none', get: function (y) { return y.age; }, format: String, sticky: true, default: true });
   c({ id: 'year', label: 'Year', group: 'Timeline', kind: 'none', get: function (y) { return y.year; }, format: String, default: true });
+  c({ id: 'spouseAge', label: 'Spouse age', group: 'Timeline', kind: 'none', get: function (y) { return y.spouseAge; }, format: String, default: true,
+    when: function (plan) { return !!(plan.spouse && plan.spouse.enabled); }, title: 'Your spouse’s age' });
   c({ id: 'employment', label: 'Employment', group: 'Income', kind: 'flow', get: function (y) { return y.employment; }, default: true });
   c({ id: 'cpp', label: 'CPP', group: 'Income', kind: 'flow', get: function (y) { return y.cpp; }, default: true });
   c({ id: 'oas', label: 'OAS', group: 'Income', kind: 'flow', get: function (y) { return y.oas; }, default: true });
@@ -23,7 +25,7 @@
   c({ id: 'incomeTax', label: 'Income tax', group: 'Tax', kind: 'flow', get: function (y) { return y.incomeTax; }, default: false });
   c({ id: 'payroll', label: 'CPP/EI contrib.', group: 'Tax', kind: 'flow', get: function (y) { return y.payroll; }, default: false });
   c({ id: 'oasClawback', label: 'OAS clawback', group: 'Tax', kind: 'flow', get: function (y) { return y.oasClawback; }, default: false });
-  c({ id: 'avgRate', label: 'Avg tax rate', group: 'Tax', kind: 'none', get: function (y) { var g = y.taxDetail.grossIncome; return g > 0 ? y.tax / g : null; }, format: function (v) { return v == null ? '—' : fmt.pct(v); }, default: false });
+  c({ id: 'avgRate', label: 'Avg tax rate', group: 'Tax', kind: 'none', get: function (y) { var g = y.grossIncome; return g > 0 ? y.tax / g : null; }, format: function (v) { return v == null ? '—' : fmt.pct(v); }, default: false });
   c({ id: 'spendingBase', label: 'Base spending', group: 'Spending', kind: 'flow', get: function (y) { return y.spendingBase; }, default: false });
   c({ id: 'eventExpenses', label: 'Event costs', group: 'Spending', kind: 'flow', get: function (y) { return y.eventExpenses; }, default: false });
   c({ id: 'spending', label: 'Spending', group: 'Spending', kind: 'flow', get: function (y) { return y.spending; }, default: true });
@@ -44,7 +46,7 @@
     var out = [];
     cols.list().forEach(function (col) {
       var isHidden = hidden.indexOf(col.id) >= 0 || (col.default === false && hidden.indexOf('+' + col.id) < 0);
-      if (isHidden) return;
+      if (isHidden || (col.when && !col.when(plan))) return;
       if (col.expand === 'contrib') {
         plan.accounts.forEach(function (a) {
           out.push({ id: 'con_' + a.id, label: '→ ' + a.name, group: 'Cash flow', kind: 'flow', title: 'Contributed to ' + a.name, get: function (y) { return y.contribByAccount[a.id] || 0; } });
@@ -140,7 +142,7 @@
         var items = [];
         var lastGroup = null;
         cols.list().forEach(function (col) {
-          if (col.sticky) return;
+          if (col.sticky || (col.when && !col.when(res.plan))) return;
           if (col.group !== lastGroup) { items.push({ heading: col.group }); lastGroup = col.group; }
           items.push({ label: (isVisible(col, hidden) ? '✓ ' : '  ') + col.label, onclick: function () { toggleColumn(col); } });
         });

@@ -425,6 +425,125 @@ test('validator flags a distribution yield written as a percentage', function ()
   ok(/distYield/.test(paths) && /distType/.test(paths), paths);
 });
 
+console.log('Couples');
+function couplePlan(spouse) {
+  var p = RP.util.clone(plan);
+  p.spouse = Object.assign(RP.util.clone(p.spouse), { enabled: true, salary: 0, cppEnabled: false, oasEnabled: false }, spouse || {});
+  return p;
+}
+function retiredRrifPlan(youAge, spAge, split) {
+  var p = couplePlan({ currentAge: spAge, retirementAge: spAge });
+  Object.assign(p.profile, { currentAge: youAge, retirementAge: youAge, endAge: youAge + 10 });
+  p.income.salary = 0; p.benefits.cppEnabled = false; p.benefits.oasEnabled = false;
+  p.spending.total = 50000; p.tax.pensionSplitting = split;
+  p.accounts = [{ id: 'r', name: 'RRSP', type: 'rrsp', balance: 1000000, contribLimit: 'legal' }];
+  p.savings.order = ['r']; p.retirement.withdrawalOrder = ['r'];
+  return p;
+}
+test('a spouse with no income or accounts changes nothing (splitting off)', function () {
+  var p = couplePlan(); p.tax.pensionSplitting = false;
+  var r = RP.engine.project(p);
+  r.years.forEach(function (y, i) {
+    near(y.tax, res.years[i].tax, 0.01, 'tax at ' + y.age);
+    near(y.total, res.years[i].total, 0.01, 'balance at ' + y.age);
+  });
+  ok(r.years[0].spouseAge === p.spouse.currentAge && r.years[5].spouseAge === p.spouse.currentAge + 5);
+});
+test('each spouse is taxed on their own salary (two returns, two sets of brackets)', function () {
+  var p = couplePlan({ salary: 60000, growth: plan.income.growth }); p.income.salary = 60000;
+  p.accounts = []; p.savings.order = []; p.retirement.withdrawalOrder = [];
+  var y = RP.engine.project(p).years[0];
+  near(y.employment, 120000, 0.01);
+  var one = RP.tax.compute({ employment: 60000 }, y.taxCtx).totalWithPayroll;
+  near(y.tax, 2 * one, 1, 'two equal returns');
+  ok(y.tax < RP.tax.compute({ employment: 120000 }, y.taxCtx).totalWithPayroll, 'less than one person earning it all');
+  near(y.taxPeople[0].detail.totalWithPayroll + y.taxPeople[1].detail.totalWithPayroll, y.tax, 0.01);
+});
+test('spouse salary stops at the spouse’s retirement age; CPP/OAS start at the spouse’s ages', function () {
+  var p = couplePlan({ currentAge: 30, retirementAge: 55, salary: 50000, cppEnabled: true, cppAt65: 10000, cppStartAge: 65, oasEnabled: true, oasStartAge: 65 });
+  p.profile.currentAge = 35; p.profile.retirementAge = 70; p.income.salary = 0;
+  p.benefits.cppEnabled = false; p.benefits.oasEnabled = false;
+  var r = RP.engine.project(p);
+  ok(rowAt(r, 59).employment > 0 && rowAt(r, 60).employment === 0, 'spouse retires at their 55 = your 60');
+  ok(rowAt(r, 69).cpp === 0 && rowAt(r, 70).cpp > 0, 'spouse CPP from their 65 = your 70');
+});
+test('spouse-owned RRSP: room from the spouse’s income, RRIF minimum at the spouse’s 72', function () {
+  var p = couplePlan({ currentAge: 69, retirementAge: 60 });
+  Object.assign(p.profile, { currentAge: 70, retirementAge: 70, endAge: 80 });
+  p.income.salary = 0; p.spending.total = 30000; p.tax.pensionSplitting = false;
+  p.accounts = [{ id: 'mine', name: 'Mine', type: 'rrsp', balance: 2000000, contribLimit: 'legal' },
+    { id: 'sp', name: 'Spouse', type: 'rrsp', owner: 'spouse', balance: 100000, contribLimit: 'legal' }];
+  p.savings.order = ['mine', 'sp']; p.retirement.withdrawalOrder = ['mine', 'sp'];
+  var r = RP.engine.project(p);
+  ok(rowAt(r, 72).withdrawByAccount.mine > 0, 'your RRIF minimum at 72');
+  ok(!rowAt(r, 72).withdrawByAccount.sp, 'spouse is 71: no minimum yet');
+  ok(rowAt(r, 73).withdrawByAccount.sp > 0 && rowAt(r, 73).taxPeople[1].inputs.rrif > 0, 'spouse RRIF minimum at their 72, on their return');
+  var p2 = couplePlan({ currentAge: 40, retirementAge: 65, salary: 80000 });
+  p2.income.salary = 0; p2.profile.retirementAge = 80;
+  p2.accounts = [{ id: 'sp', name: 'Spouse RRSP', type: 'rrsp', owner: 'spouse', balance: 0, contribLimit: 'legal', startingRoom: 0 }];
+  p2.savings.order = ['sp'];
+  var y1 = RP.engine.project(p2).years[1];
+  near(y1.roomByAccount.sp + y1.contribByAccount.sp, 0.18 * 80000, 1, 'room = 18% of the spouse’s prior-year salary');
+  ok(y1.taxPeople[1].inputs.rrspDeduction > 0 && !y1.taxPeople[0].inputs.rrspDeduction, 'deduction on the spouse’s return');
+});
+test('pension splitting moves RRIF income to the lower-income spouse and lowers tax', function () {
+  var on = RP.engine.project(retiredRrifPlan(72, 70, true)), off = RP.engine.project(retiredRrifPlan(72, 70, false));
+  var y = on.years[0], z = off.years[0];
+  ok(y.pensionSplit > 0, 'you → spouse: ' + y.pensionSplit);
+  ok(y.pensionSplit <= 0.5 * z.taxInputs.rrif + 0.01, 'at most half');
+  ok(y.tax < z.tax - 3000, 'tax ' + y.tax + ' vs ' + z.tax);
+  near(y.taxPeople[0].inputs.rrif + y.taxPeople[1].inputs.rrif, y.withdrawals, 1, 'income is moved, not created');
+  ok(on.summary.endingReal > off.summary.endingReal);
+});
+test('RRIF income cannot be split before the owner is 65', function () {
+  var y = RP.engine.project(retiredRrifPlan(60, 60, true)).years[0];
+  ok(y.taxInputs.rrif > 0 && y.pensionSplit === 0);
+});
+test('defined-benefit pension can be split at any age; split RRIF income only earns a 65+ spouse the pension credit', function () {
+  var c = function (age) { return { age: age, province: 'ON', data: d, index: 1, settings: { mode: 'calculated', includePayroll: true, oasClawback: true } }; };
+  var db = RP.engine.householdTax([{ pension: 80000 }, {}], [c(60), c(60)], true);
+  ok(db.split > 0, 'DB pension split at 60');
+  var rrif = RP.engine.householdTax([{ rrif: 80000 }, {}], [c(70), c(60)], true);
+  ok(rrif.split > 0 && rrif.incs[1].rrif > 0 && !rrif.incs[1].pension, 'moved RRIF income stays RRIF income for the spouse');
+});
+test('income events can belong to the spouse', function () {
+  var p = couplePlan();
+  p.tax.pensionSplitting = false;
+  p.events = [{ id: 'e1', type: 'income', label: 'Spouse pension', amount: 40000, startAge: 35, endAge: 40, taxType: 'pension', owner: 'spouse', indexed: true }];
+  var y = RP.engine.project(p).years[0];
+  near(y.taxPeople[1].inputs.pension, 40000, 0.01);
+  ok(!y.taxPeople[0].inputs.pension);
+});
+test('validator: owner values and a spouse-owned account without a spouse', function () {
+  var n = RP.schema.normalize({ base: { accounts: [{ id: 'a', type: 'tfsa', balance: 1, owner: 'spouse' }, { id: 'b', type: 'tfsa', balance: 1, owner: 'partner' }],
+    spouse: { enabled: false } } });
+  var v = RP.schema.validate(n);
+  ok(v.some(function (x) { return x.level === 'warning' && /accounts\.0\.owner/.test(x.path); }), 'warns');
+  ok(v.some(function (x) { return x.level === 'error' && /accounts\.1\.owner/.test(x.path); }), 'errors');
+  var n2 = RP.schema.normalize({ base: { spouse: { enabled: true, currentAge: 'forty', salary: -1, growth: 3 } } });
+  var paths = RP.schema.validate(n2).map(function (x) { return x.path; }).join(' ');
+  ok(/spouse\.currentAge/.test(paths) && /spouse\.salary/.test(paths) && /spouse\.growth/.test(paths), paths);
+});
+test('fuzz: 120 random couples keep cash balanced, balances ≥ 0, and two returns that add up', function () {
+  var rnd = RP.util.rng(7);
+  for (var n = 0; n < 120; n++) {
+    var p = couplePlan({ currentAge: 25 + Math.floor(rnd() * 40), retirementAge: 55 + Math.floor(rnd() * 12), salary: Math.round(rnd() * 150000),
+      cppEnabled: rnd() > 0.2, cppAt65: Math.round(rnd() * 15000), oasEnabled: rnd() > 0.2 });
+    p.profile.currentAge = 25 + Math.floor(rnd() * 40); p.profile.retirementAge = Math.max(p.profile.currentAge, 55 + Math.floor(rnd() * 12));
+    p.income.salary = Math.round(rnd() * 200000); p.spending.total = 30000 + Math.round(rnd() * 90000);
+    p.tax.pensionSplitting = rnd() > 0.3;
+    p.accounts.forEach(function (a) { a.owner = rnd() > 0.5 ? 'spouse' : 'self'; a.balance = Math.round(rnd() * 500000); });
+    p.retirement.strategy = ['needs', 'needs', 'fixedReal', 'percentBalance'][Math.floor(rnd() * 4)];
+    var r = RP.engine.project(p);
+    r.years.forEach(function (y) {
+      near(y.incomeTotal + y.withdrawals + y.shortfall, y.tax + y.spending + y.contributions + y.unallocated, 2, 'plan ' + n + ' age ' + y.age);
+      near(y.taxPeople[0].detail.totalWithPayroll + y.taxPeople[1].detail.totalWithPayroll, y.tax, 0.01);
+      Object.keys(y.balances).forEach(function (k) { ok(y.balances[k] >= 0); });
+      ok(y.taxPeople[0].inputs.rrif >= -0.01 && y.taxPeople[1].inputs.rrif >= -0.01, 'no negative RRIF income after a split');
+    });
+  }
+});
+
 console.log('Review fixes (regressions)');
 test('OAS stays inflation-indexed when tax brackets are not', function () {
   var p2 = RP.util.clone(plan); p2.tax.indexBrackets = false; p2.profile.currentAge = 64; p2.profile.retirementAge = 64;

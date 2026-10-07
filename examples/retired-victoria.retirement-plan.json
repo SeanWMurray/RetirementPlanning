@@ -20,6 +20,20 @@
       "salary": 0,
       "growth": 0
     },
+    "spouse": {
+      "enabled": false,
+      "name": "Spouse",
+      "currentAge": 35,
+      "retirementAge": 60,
+      "salary": 70000,
+      "growth": 0.03,
+      "cppEnabled": true,
+      "cppAt65": 10000,
+      "cppStartAge": 65,
+      "oasEnabled": true,
+      "oasStartAge": 65,
+      "oasResidency": 1
+    },
     "tax": {
       "year": "2026",
       "mode": "calculated",
@@ -46,7 +60,8 @@
       "indexBrackets": true,
       "includePayroll": true,
       "selfEmployed": false,
-      "oasClawback": true
+      "oasClawback": true,
+      "pensionSplitting": true
     },
     "spending": {
       "mode": "total",

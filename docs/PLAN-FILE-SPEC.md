@@ -44,6 +44,7 @@ You are generating a JSON plan file for a deterministic Canadian retirement proj
 | Topic | Ask for | Default if unknown |
 |---|---|---|
 | Basics | Current age, target retirement age, province/territory | plan to age 95 |
+| Household | Single or a couple? For a couple: spouse's age, retirement age, salary, CPP estimate, and which accounts are whose | single |
 | Income | Gross annual employment income; expected raises; self-employed? | raises 2.5–3%/yr nominal |
 | Spending | Annual spending now (or a breakdown); change expected in retirement | about 55–65% of gross income; no change |
 | Accounts | Balances of RRSP/RRIF/LIRA, TFSA, non-registered (and its cost base), cash | non-reg cost base = 80% of balance |
@@ -121,6 +122,23 @@ You are generating a JSON plan file for a deterministic Canadian retirement proj
 | `salary` | number ≥ 0 | 100000 | Gross annual employment (or self-employment) income now. Use `0` if retired. |
 | `growth` | rate | 0.03 | Annual raise, **nominal** (includes inflation). |
 
+### `base.spouse` (optional)
+
+Add a spouse or common-law partner. Omit this object (or set `enabled: false`) for a single person. Spending, events, scenarios and the plan's timeline stay household-wide and use **your** age; the ages below are the spouse's own.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | boolean | `false` | `true` to plan for a couple. |
+| `name` | string | `"Spouse"` | Shown in the app. |
+| `currentAge` | integer 16–110 | 35 | Spouse's age in the first projection year. |
+| `retirementAge` | integer | 60 | Spouse's salary stops at this age (their age). |
+| `salary` | number ≥ 0 | 70000 | Spouse's gross annual employment income now. |
+| `growth` | rate | 0.03 | Spouse's annual raise, nominal. |
+| `cppEnabled`, `cppAt65`, `cppStartAge` | | `true`, 10000, 65 | Spouse's CPP/QPP, as in `base.benefits`. |
+| `oasEnabled`, `oasStartAge`, `oasResidency` | | `true`, 65, 1 | Spouse's OAS, as in `base.benefits`. |
+
+Each account belongs to one spouse (`account.owner`). Each spouse files a separate return; eligible pension income can be split between them (`tax.pensionSplitting`). The plan's `profile.retirementAge` (yours) still marks the switch from saving to drawing down.
+
 ### `base.spending`
 
 | Field | Type | Default | Description |
@@ -152,8 +170,9 @@ One-off or temporary costs (a car, a wedding, kids) are better modelled as **eve
 |---|---|---|
 | `id` | string | Unique id, referenced by `savings.order`, `retirement.withdrawalOrder` and contribution events. |
 | `name` | string | Label. |
-| `type` | enum | `"rrsp"`: RRSP/RRIF/LIRA/spousal RRSP (tax-deductible contributions, fully taxable withdrawals, RRIF minimums from 72). `"tfsa"`: tax-free. `"nonreg"`: non-registered (growth taxed as capital gains on withdrawal, 50% inclusion). `"cash"`: savings/HISA/GIC (interest taxed every year). |
+| `type` | enum | `"rrsp"`: RRSP/RRIF/LIRA (tax-deductible contributions, fully taxable withdrawals, RRIF minimums from 72). `"tfsa"`: tax-free. `"nonreg"`: non-registered (growth taxed as capital gains on withdrawal, 50% inclusion). `"cash"`: savings/HISA/GIC (interest taxed every year). |
 | `balance` | number ≥ 0 | Current balance. |
+| `owner` | enum | Couples only: `"self"` (default) or `"spouse"`. RRSP room, RRIF minimums, withdrawals, deductions and investment income are taxed on the owner's return. Give each spouse their own RRSP and TFSA. |
 | `costBase` | number | `nonreg` only: adjusted cost base (ACB). Default = balance. |
 | `distYield` | rate | `nonreg` only: taxable distributions per year as a share of the balance (dividends, interest, fund distributions), e.g. `0.02`. Part of the account's return (not extra), taxed in the year received, reinvested, and added to the ACB. Default `0` if omitted; `0.015`–`0.03` is typical for balanced or dividend portfolios. |
 | `distType` | enum | `nonreg` only: `"mix"` (⅓ each, default), `"dividends"` (Canadian eligible dividends: gross-up and dividend tax credit), `"interest"` (fully taxable; also use for foreign dividends), `"gains"` (capital-gain distributions, 50% taxable). |
@@ -226,6 +245,7 @@ If spending exceeds after-tax income in a working year, the shortfall is withdra
 | `includePayroll` | boolean | `true` | Deduct CPP/QPP, EI and QPIP from employment income. |
 | `selfEmployed` | boolean | `false` | Self-employed: pays both CPP halves and no EI. |
 | `oasClawback` | boolean | `true` | Apply the OAS recovery tax. |
+| `pensionSplitting` | boolean | `true` | Couples only: each year, allocate up to half of either spouse's eligible pension income (DB pension at any age; RRSP/RRIF income from 65) to the other when it lowers the household's tax. |
 
 ### `base.events` (array)
 
@@ -257,6 +277,7 @@ Ranges are inclusive. If `endAge` is omitted or equals `startAge`, the event las
 | `startAge`, `endAge` | integer | Range. |
 | `taxType` | enum | `"other"` = fully taxable. `"pension"` = taxable and eligible for the pension credit (DB pensions, annuities). `"nontaxable"`. |
 | `indexed` | boolean | Default `true`. For a pension without indexation, use `false` and enter the amount in the dollars of the year it starts. |
+| `owner` | enum | Couples only: `"self"` (default) or `"spouse"`: whose return the income is taxed on. Ages are still your age. Also allowed on `lumpSum` events and on `adjustment` events with `target: "income"` (to adjust the spouse's salary). |
 
 **`lumpSum`**: a one-time inflow (inheritance, home sale, business sale, insurance).
 
@@ -356,6 +377,7 @@ The planner checks every file it opens. Errors are shown with the field path. Ma
 |---|---|
 | Defined-benefit pension | `income` event, `taxType: "pension"`, from pension start to `endAge`. Add a second event for a bridge benefit ending at 64. Set the RRSP to `contribLimit: "custom"` with a small amount, because pension adjustments reduce RRSP room. |
 | Buying a home | `expense` for the down payment and closing costs at the purchase age, plus a `spending` `adjustment` for the change in housing costs. |
+| Couple | Set `spouse.enabled: true` with the spouse's age, retirement age, salary and CPP/OAS. Give each spouse their own RRSP and TFSA with `owner`; joint non-registered accounts can go to the higher earner or be split into two accounts. Keep `tax.pensionSplitting: true`. A spouse's DB pension is an `income` event with `owner: "spouse"`. |
 | Selling or downsizing a home | `lumpSum`, `taxType: "nontaxable"` (principal residence), net of costs. |
 | Children | `expense` with an age range (e.g. $15,000/yr for 18 years). RESP contributions can be an `expense` too. |
 | Post-secondary costs | `expense` over the study years. |
@@ -383,7 +405,7 @@ The planner checks every file it opens. Errors are shown with the field path. Ma
 
 ## Part 9: Limitations (tell the user when relevant)
 
-- One person only: no spousal pension splitting, survivor benefits or spousal RRSP attribution.
+- Couples are basic: both spouses are assumed to live to the end of the plan (no survivor benefits, RRSP/RRIF rollover or single-person household after a death), and there are no spousal RRSPs or attribution, CPP sharing or spousal credits. The plan ends at your `endAge`.
 - Non-registered growth beyond the distribution yield is treated as deferred capital gains. Foreign dividends should be entered as `interest`. Return of capital isn't modelled.
 - RRSP room ignores pension adjustments. The RRSP maximum is indexed with inflation.
 - Not modelled: non-eligible dividends, AMT, provincial low-income reductions, refundable credits, capital losses, the Home Buyers' Plan, LIRA unlocking rules, GIS.
@@ -413,6 +435,37 @@ Everything not listed falls back to defaults.
     "savings": { "mode": "surplus", "order": ["rrsp", "tfsa", "nonreg"] },
     "retirement": { "strategy": "needs", "withdrawalOrder": ["nonreg", "rrsp", "tfsa"] },
     "benefits": { "cppEnabled": true, "cppAt65": 12000, "cppStartAge": 65, "oasEnabled": true, "oasStartAge": 65, "oasResidency": 1 }
+  },
+  "scenarios": []
+}
+```
+
+A couple: add `spouse` and give each account an `owner`.
+
+```json
+{
+  "app": "canadian-retirement-planner",
+  "schemaVersion": 2,
+  "meta": { "name": "Couple plan", "notes": "Each spouse has an RRSP and a TFSA; pension income is split." },
+  "base": {
+    "profile": { "currentAge": 55, "retirementAge": 62, "endAge": 95, "province": "ON", "startYear": 2026 },
+    "income": { "salary": 105000, "growth": 0.025 },
+    "spouse": { "enabled": true, "name": "Alex", "currentAge": 53, "retirementAge": 60, "salary": 48000, "growth": 0.025,
+      "cppEnabled": true, "cppAt65": 8000, "cppStartAge": 65, "oasEnabled": true, "oasStartAge": 65, "oasResidency": 1 },
+    "tax": { "pensionSplitting": true },
+    "spending": { "mode": "total", "total": 80000, "retirementChange": -0.05 },
+    "accounts": [
+      { "id": "rrsp", "name": "My RRSP", "type": "rrsp", "owner": "self", "balance": 420000, "contribLimit": "legal", "startingRoom": 15000 },
+      { "id": "tfsa", "name": "My TFSA", "type": "tfsa", "owner": "self", "balance": 90000, "contribLimit": "legal", "startingRoom": 10000 },
+      { "id": "sp_rrsp", "name": "Alex RRSP", "type": "rrsp", "owner": "spouse", "balance": 110000, "contribLimit": "legal", "startingRoom": 5000 },
+      { "id": "sp_tfsa", "name": "Alex TFSA", "type": "tfsa", "owner": "spouse", "balance": 70000, "contribLimit": "legal", "startingRoom": 20000 }
+    ],
+    "savings": { "mode": "surplus", "order": ["rrsp", "sp_rrsp", "tfsa", "sp_tfsa"] },
+    "retirement": { "strategy": "needs", "withdrawalOrder": ["rrsp", "sp_rrsp", "tfsa", "sp_tfsa"] },
+    "benefits": { "cppEnabled": true, "cppAt65": 14500, "cppStartAge": 65, "oasEnabled": true, "oasStartAge": 65, "oasResidency": 1 },
+    "events": [
+      { "id": "ev_alex_db", "type": "income", "label": "Alex DB pension", "amount": 12000, "startAge": 62, "endAge": 95, "taxType": "pension", "owner": "spouse", "indexed": true, "enabled": true }
+    ]
   },
   "scenarios": []
 }

@@ -22,6 +22,7 @@ The app follows your system's light/dark setting; you can also switch themes und
 - **Tax engine.** Federal plus every province and territory, using 2026 brackets. It handles the basic personal amount (with phase-outs), age, pension and Canada employment amounts, and CPP/QPP, EI and QPIP. It also covers enhanced CPP deductions, the OAS clawback, the Ontario surtax and Health Premium, and the Quebec abatement. Brackets index forward with inflation. You can override with a flat rate or your own brackets.
 - **Accounts.** RRSP/RRIF (deductible contributions, taxable withdrawals, RRIF minimums from 72), TFSA, non-registered (cost base tracked, capital gains taxed on withdrawal, yearly taxable distributions as eligible dividends, interest or capital gains with the dividend tax credit) and cash/HISA (interest taxed annually). Contribution and withdrawal orders are configurable, with per-account return overrides.
 - **Contributions & room.** Each account takes savings up to its contribution room, a set annual amount, no limit, or nothing. RRSP room is 18% of the prior year's earned income up to the indexed maximum, with no contributions after 71. TFSA room uses the annual limit indexed in $500 steps, carries unused room forward and re-adds withdrawals the following year. You can enter your current unused room from CRA My Account or your Notice of Assessment. A *Contribution change* event overrides any account for a range of ages, for example maxing the TFSA from 40–50 or stopping RRSP contributions at 55.
+- **Couples.** Add a spouse or partner with their own age, retirement age, salary, CPP and OAS. Each account belongs to one of you, so RRSP room, RRIF minimums and investment income follow the owner. Each spouse files their own return, and eligible pension income (RRIF income from 65, DB pensions at any age) is split each year when it lowers the household's tax. The Tax tab shows both returns and the split.
 - **Government benefits.** CPP with early/late adjustment and OAS with deferral, residency, the 10% boost at 75, and the clawback.
 - **Spending.** One total, or itemised lines tagged "always", "working" or "retired". Includes a percentage change at retirement.
 - **Savings.** Save the whole surplus, a percentage of salary, or a fixed amount.
@@ -52,7 +53,7 @@ The phone layout is chosen from the window width and the physical screen size, s
 
 ## Example plans
 
-Six ready-made plans with scenarios ship with the app. Open them with **File › Open Example…**, or download them from [`examples/`](examples/):
+Seven ready-made plans with scenarios ship with the app. Open them with **File › Open Example…**, or download them from [`examples/`](examples/):
 
 | Example | Situation | Scenarios |
 |---|---|---|
@@ -62,6 +63,7 @@ Six ready-made plans with scenarios ship with the app. Open them with **File ›
 | [Self-employed consultant — Montréal](examples/self-employed-montreal.retirement-plan.json) | 45, QC, $120k self-employed | Sell the business · sabbatical · lower returns |
 | [Recently retired — Victoria](examples/retired-victoria.retirement-plan.json) | 67, BC, retired | 4% rule · RRIF meltdown · crash at 68 |
 | [Late starter — Winnipeg](examples/late-starter-winnipeg.retirement-plan.json) | 52, MB, $68k, little saved | Work longer · spend less · inheritance · all three |
+| [Dual-income couple — Ottawa](examples/couple-ottawa.retirement-plan.json) | 46 and 44, ON, $118k + $64k | No pension splitting · one retires at 55 · both retire early |
 
 See [examples/README.md](examples/README.md) for each plan's story and results.
 
@@ -150,14 +152,14 @@ The tests cover bracket math, CPP/EI maximums, the OAS clawback, the Quebec abat
 ## Method & limitations
 
 See the **Notes & method** tab in the app for the full methodology. In brief:
-- Single person (no spousal planning or pension splitting yet).
+- Couples are basic: both spouses are assumed to live to the end of the plan (no survivor benefits or RRSP rollover at death), and there are no spousal RRSPs, CPP sharing or spousal credits.
 - Contributions are made mid-year and withdrawals at the start of the year. One inflation index drives every indexed amount; with only indexed rules the plan is inflation-neutral (real results identical at any inflation rate; covered by a test). Amounts that are fixed in law (federal $2,000 pension amount, most provincial pension amounts, the CPP basic exemption, Ontario Health Premium thresholds) are not indexed.
 - Non-registered growth beyond the distribution yield is treated as deferred capital gains at 50% inclusion.
 - CPP is indexed from your entered estimate rather than modelled from your earnings history.
 - Non-registered distributions use eligible-dividend, interest or capital-gain treatment only (no non-eligible dividends or return of capital). No AMT or low-income provincial reductions.
 - Contribution room is tracked but simplified: RRSP room uses employment income only (no pension adjustment), and the RRSP maximum is indexed with inflation rather than average wage growth.
 
-Ideas for later: spouse/household modelling with pension splitting; guardrail withdrawal strategies; RRSP meltdown/CPP-timing optimisers; pension adjustments; shareable plan links.
+Ideas for later: survivor modelling for couples; guardrail withdrawal strategies; RRSP meltdown/CPP-timing optimisers; pension adjustments; shareable plan links.
 
 ## Disclaimer
 

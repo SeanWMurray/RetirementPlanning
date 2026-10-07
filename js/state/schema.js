@@ -30,10 +30,16 @@
     return {
       profile: { currentAge: 35, retirementAge: 60, endAge: 95, province: 'ON', startYear: new Date().getFullYear() },
       income: { salary: 100000, growth: 0.03 },
+      // Optional spouse/partner. Ages are the spouse's own; the plan's timeline follows your age.
+      spouse: {
+        enabled: false, name: 'Spouse', currentAge: 35, retirementAge: 60, salary: 70000, growth: 0.03,
+        cppEnabled: true, cppAt65: 10000, cppStartAge: 65, oasEnabled: true, oasStartAge: 65, oasResidency: 1
+      },
       tax: {
         year: RP.taxData.latest, mode: 'calculated', flatRate: 0.30,
         customBrackets: [{ upTo: 50000, rate: 0.20 }, { upTo: 100000, rate: 0.30 }, { upTo: 200000, rate: 0.40 }, { upTo: null, rate: 0.50 }],
-        customCredit: 15000, indexBrackets: true, includePayroll: true, selfEmployed: false, oasClawback: true
+        customCredit: 15000, indexBrackets: true, includePayroll: true, selfEmployed: false, oasClawback: true,
+        pensionSplitting: true
       },
       spending: {
         mode: 'total', total: 55000, retirementChange: 0, growthWorking: null, growthRetired: null,
@@ -201,7 +207,8 @@
     'adjustment.kind': ['step', 'growth'],
     'returnOverride.mode': ['set', 'add'],
     'contribution.mode': ['custom', 'legal', 'none'],
-    'account.distType': ['mix', 'dividends', 'interest', 'gains']
+    'account.distType': ['mix', 'dividends', 'interest', 'gains'],
+    owner: ['self', 'spouse']
   };
   schema.ENUMS = ENUMS;
 
@@ -210,7 +217,7 @@
     ['income.growth', -0.2, 0.3], ['assumptions.inflation', -0.05, 0.2], ['assumptions.returnPre', -0.5, 0.3],
     ['assumptions.returnPost', -0.5, 0.3], ['assumptions.cashReturn', -0.1, 0.2], ['assumptions.volatility', 0, 0.6],
     ['spending.retirementChange', -1, 2], ['spending.growthWorking', -0.2, 0.2], ['spending.growthRetired', -0.2, 0.2], ['savings.rate', 0, 1], ['savings.rateStep', -0.1, 0.1], ['savings.rateMax', 0, 1], ['savings.amountGrowth', -0.5, 0.5], ['retirement.withdrawalRate', 0, 0.5],
-    ['tax.flatRate', 0, 0.9], ['benefits.oasResidency', 0, 1]
+    ['tax.flatRate', 0, 0.9], ['benefits.oasResidency', 0, 1], ['spouse.growth', -0.2, 0.3], ['spouse.oasResidency', 0, 1]
   ];
 
   schema.validate = function (doc) {
@@ -281,6 +288,8 @@
           else if (a.distYield < 0) err(ap + '.distYield', 'must be ≥ 0');
         }
         if (a.distType != null) oneOf(ap + '.distType', a.distType, ENUMS['account.distType']);
+        if (a.owner != null) oneOf(ap + '.owner', a.owner, ENUMS.owner);
+        if (a.owner === 'spouse' && !(p.spouse && p.spouse.enabled)) warn(ap + '.owner', 'is "spouse" but spouse.enabled is false, so the account is treated as yours');
         if (a.type === 'nonreg' && a.costBase != null && isNum(a.costBase) && isNum(a.balance) && a.costBase > a.balance * 3) warn(ap + '.costBase', 'is much larger than the balance; check it is the adjusted cost base');
       });
       if (!(p.accounts || []).length) warn(prefix + 'accounts', 'no accounts: savings have nowhere to go');
@@ -294,6 +303,17 @@
         if (isNum(p.benefits.oasStartAge) && (p.benefits.oasStartAge < 65 || p.benefits.oasStartAge > 70)) err(prefix + 'benefits.oasStartAge', 'must be between 65 and 70');
         if (isNum(p.benefits.cppAt65) && p.benefits.cppAt65 > 25000) warn(prefix + 'benefits.cppAt65', 'is above the maximum CPP (~$18,100/yr in 2026); check it is an annual amount at 65');
       }
+      var sp = p.spouse;
+      if (sp && sp.enabled) {
+        ['currentAge', 'retirementAge'].forEach(function (k) {
+          if (!isNum(sp[k]) || sp[k] !== Math.round(sp[k])) err(prefix + 'spouse.' + k, 'must be a whole number of years (the spouse’s own age)');
+        });
+        if (isNum(sp.currentAge) && (sp.currentAge < 16 || sp.currentAge > 110)) err(prefix + 'spouse.currentAge', 'must be between 16 and 110');
+        if (!isNum(sp.salary) || sp.salary < 0) err(prefix + 'spouse.salary', 'must be a number ≥ 0 (annual gross, today’s dollars)');
+        if (isNum(sp.cppStartAge) && (sp.cppStartAge < 60 || sp.cppStartAge > 70)) err(prefix + 'spouse.cppStartAge', 'must be between 60 and 70');
+        if (isNum(sp.oasStartAge) && (sp.oasStartAge < 65 || sp.oasStartAge > 70)) err(prefix + 'spouse.oasStartAge', 'must be between 65 and 70');
+        if (isNum(sp.cppAt65) && sp.cppAt65 > 25000) warn(prefix + 'spouse.cppAt65', 'is above the maximum CPP (~$18,100/yr in 2026); check it is an annual amount at 65');
+      }
       return ids;
     }
 
@@ -305,7 +325,7 @@
         def.fields.forEach(function (f) {
           var v = e[f.key];
           if (f.key === 'label') return;
-          var optional = f.key === 'endAge' || f.key === 'everyYears' || f.key === 'indexed' || (f.showIf && !f.showIf(e)) ||
+          var optional = f.key === 'endAge' || f.key === 'everyYears' || f.key === 'indexed' || f.key === 'owner' || (f.showIf && !f.showIf(e)) ||
             (e.type === 'contribution' && f.key === 'amount' && e.mode !== 'custom');
           if (v == null || v === '') { if (!optional) err(ep + '.' + f.key, 'is required for ' + e.type + ' events'); return; }
           if (f.type === 'select' && !(typeof f.options === 'function')) oneOf(ep + '.' + f.key, v, f.options.map(function (o) { return o.value; }));
@@ -315,6 +335,7 @@
         if (isNum(e.startAge) && plan.profile && (e.startAge < plan.profile.currentAge || e.startAge > plan.profile.endAge)) warn(ep + '.startAge', 'age ' + e.startAge + ' is outside the plan (' + plan.profile.currentAge + '–' + plan.profile.endAge + ')');
         if (isNum(e.endAge) && isNum(e.startAge) && e.endAge < e.startAge) err(ep + '.endAge', 'must be ≥ startAge');
         if (e.type === 'contribution' && e.accountId && !ids[e.accountId]) err(ep + '.accountId', 'refers to unknown account id "' + e.accountId + '"');
+        if (e.owner != null) oneOf(ep + '.owner', e.owner, ENUMS.owner);
       });
     }
 

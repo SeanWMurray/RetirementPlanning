@@ -2,33 +2,33 @@
   "app": "canadian-retirement-planner",
   "schemaVersion": 2,
   "meta": {
-    "name": "Early career renter — Toronto",
-    "notes": "A 28-year-old renting in Toronto, saving whatever is left after spending. Lower income, so the TFSA is filled before the RRSP. Scenarios compare buying a condo at 35 (down payment plus higher housing costs until the mortgage is paid), an aggressive savings plan to retire at 50, and a faster promotion track.",
+    "name": "Dual-income couple — Ottawa",
+    "notes": "A couple planning together: Sam (46, $118k) and Jordan (44, $64k, with a small public-sector DB pension from 60). Each has their own RRSP and TFSA; the non-registered account is in Sam’s name. Spending of $88k is for the household. Open the Tax tab to see two returns and the pension income split each year. Scenarios: turning pension splitting off (to see what it saves), Jordan retiring at 55, and both retiring at 57.",
     "created": "2026-01-01T00:00:00.000Z",
     "modified": "2026-01-01T00:00:00.000Z",
     "example": true
   },
   "base": {
     "profile": {
-      "currentAge": 28,
+      "currentAge": 46,
       "retirementAge": 60,
       "endAge": 95,
       "province": "ON",
       "startYear": 2026
     },
     "income": {
-      "salary": 72000,
-      "growth": 0.035
+      "salary": 118000,
+      "growth": 0.03
     },
     "spouse": {
-      "enabled": false,
-      "name": "Spouse",
-      "currentAge": 35,
+      "enabled": true,
+      "name": "Jordan",
+      "currentAge": 44,
       "retirementAge": 60,
-      "salary": 70000,
+      "salary": 64000,
       "growth": 0.03,
       "cppEnabled": true,
-      "cppAt65": 10000,
+      "cppAt65": 9500,
       "cppStartAge": 65,
       "oasEnabled": true,
       "oasStartAge": 65,
@@ -65,8 +65,8 @@
     },
     "spending": {
       "mode": "total",
-      "total": 42000,
-      "retirementChange": 0,
+      "total": 88000,
+      "retirementChange": -0.05,
       "growthWorking": null,
       "growthRetired": null,
       "items": [
@@ -130,53 +130,68 @@
       "amountGrowth": null,
       "enforceRoom": true,
       "order": [
-        "tfsa",
         "rrsp",
-        "cash",
+        "sp_rrsp",
+        "tfsa",
+        "sp_tfsa",
         "nonreg"
       ]
     },
     "accounts": [
       {
-        "id": "tfsa",
-        "name": "TFSA",
-        "type": "tfsa",
-        "balance": 21000,
-        "contribLimit": "legal",
-        "contributionCap": null,
-        "startingRoom": 45000,
-        "returnRate": null
-      },
-      {
         "id": "rrsp",
-        "name": "RRSP",
+        "name": "Sam RRSP",
         "type": "rrsp",
-        "balance": 8000,
+        "balance": 210000,
         "contribLimit": "legal",
         "contributionCap": null,
-        "startingRoom": 22000,
+        "startingRoom": 20000,
         "returnRate": null
       },
       {
-        "id": "cash",
-        "name": "Emergency fund (HISA)",
-        "type": "cash",
-        "balance": 6000,
-        "contribLimit": "none",
-        "contributionCap": 0,
-        "startingRoom": null,
+        "id": "tfsa",
+        "name": "Sam TFSA",
+        "type": "tfsa",
+        "balance": 75000,
+        "contribLimit": "legal",
+        "contributionCap": null,
+        "startingRoom": 25000,
         "returnRate": null
+      },
+      {
+        "id": "sp_rrsp",
+        "name": "Jordan RRSP",
+        "type": "rrsp",
+        "balance": 60000,
+        "contribLimit": "custom",
+        "contributionCap": 2500,
+        "startingRoom": 8000,
+        "returnRate": null,
+        "owner": "spouse"
+      },
+      {
+        "id": "sp_tfsa",
+        "name": "Jordan TFSA",
+        "type": "tfsa",
+        "balance": 55000,
+        "contribLimit": "legal",
+        "contributionCap": null,
+        "startingRoom": 30000,
+        "returnRate": null,
+        "owner": "spouse"
       },
       {
         "id": "nonreg",
-        "name": "Non-registered",
+        "name": "Non-registered (Sam)",
         "type": "nonreg",
-        "balance": 0,
+        "balance": 40000,
         "contribLimit": "unlimited",
         "contributionCap": null,
         "startingRoom": null,
         "returnRate": null,
-        "costBase": 0
+        "costBase": 32000,
+        "distYield": 0.02,
+        "distType": "mix"
       }
     ],
     "assumptions": {
@@ -188,7 +203,7 @@
     },
     "benefits": {
       "cppEnabled": true,
-      "cppAt65": 10500,
+      "cppAt65": 15000,
       "cppStartAge": 65,
       "oasEnabled": true,
       "oasStartAge": 65,
@@ -198,121 +213,76 @@
       "strategy": "needs",
       "withdrawalRate": 0.04,
       "withdrawalOrder": [
-        "cash",
         "nonreg",
         "rrsp",
-        "tfsa"
+        "sp_rrsp",
+        "tfsa",
+        "sp_tfsa"
       ],
       "rrifMinimums": true
     },
     "events": [
       {
-        "id": "ev_early_1",
-        "type": "expense",
+        "id": "ev_couple_db",
+        "type": "income",
         "enabled": true,
-        "label": "Wedding",
-        "amount": 30000,
-        "startAge": 31,
-        "endAge": 31,
-        "everyYears": 1,
-        "indexed": true
+        "label": "Jordan’s DB pension",
+        "amount": 16000,
+        "startAge": 62,
+        "endAge": 95,
+        "taxType": "pension",
+        "indexed": true,
+        "owner": "spouse"
       },
       {
-        "id": "ev_early_2",
+        "id": "ev_couple_2",
         "type": "expense",
         "enabled": true,
-        "label": "Car every 10 years",
-        "amount": 30000,
-        "startAge": 30,
-        "endAge": 80,
-        "everyYears": 10,
+        "label": "Travel while healthy",
+        "amount": 15000,
+        "startAge": 60,
+        "endAge": 72,
+        "everyYears": 1,
         "indexed": true
       }
     ]
   },
   "scenarios": [
     {
-      "id": "sc_early_3",
-      "name": "Buy a condo at 35",
+      "id": "sc_couple_3",
+      "name": "No pension splitting",
       "color": "#e0812f",
       "visible": true,
-      "notes": "$70k down payment, ownership costs ~15% above renting until the mortgage is paid at 60, downsize at 80.",
-      "overrides": {},
-      "events": [
-        {
-          "id": "ev_early_4",
-          "type": "expense",
-          "enabled": true,
-          "label": "Condo down payment + closing",
-          "amount": 70000,
-          "startAge": 35,
-          "endAge": 35,
-          "everyYears": 1,
-          "indexed": true
-        },
-        {
-          "id": "ev_early_5",
-          "type": "adjustment",
-          "enabled": true,
-          "label": "Mortgage + condo fees vs rent",
-          "target": "spending",
-          "kind": "step",
-          "unit": "percent",
-          "pct": 0.15,
-          "amount": 10000,
-          "indexed": true,
-          "startAge": 35,
-          "endAge": 59
-        },
-        {
-          "id": "ev_early_6",
-          "type": "lumpSum",
-          "enabled": true,
-          "label": "Sell condo (net)",
-          "amount": 300000,
-          "startAge": 80,
-          "taxType": "nontaxable",
-          "indexed": true
-        }
-      ],
-      "disabledEvents": []
-    },
-    {
-      "id": "sc_early_7",
-      "name": "Aggressive saver — retire at 50",
-      "color": "#239c8f",
-      "visible": true,
-      "notes": "Spend $36k instead of $42k and retire at 50.",
+      "notes": "The same plan with pension income splitting turned off, to show what it saves.",
       "overrides": {
-        "profile.retirementAge": 50,
-        "spending.total": 36000
+        "tax.pensionSplitting": false
       },
       "events": [],
       "disabledEvents": []
     },
     {
-      "id": "sc_early_8",
-      "name": "Promotion track",
+      "id": "sc_couple_4",
+      "name": "Jordan retires at 55",
+      "color": "#239c8f",
+      "visible": true,
+      "notes": "",
+      "overrides": {
+        "spouse.retirementAge": 55
+      },
+      "events": [],
+      "disabledEvents": []
+    },
+    {
+      "id": "sc_couple_5",
+      "name": "Both retire at 57",
       "color": "#8b5ca8",
       "visible": true,
-      "notes": "An extra 2%/yr of raises from 30 to 40.",
-      "overrides": {},
-      "events": [
-        {
-          "id": "ev_early_9",
-          "type": "adjustment",
-          "enabled": true,
-          "label": "Promotion track",
-          "target": "income",
-          "kind": "growth",
-          "unit": "percent",
-          "pct": 0.02,
-          "amount": 10000,
-          "indexed": true,
-          "startAge": 30,
-          "endAge": 40
-        }
-      ],
+      "notes": "Sam at 57 and Jordan at 55 (the same calendar year).",
+      "overrides": {
+        "profile.retirementAge": 57,
+        "spouse.retirementAge": 55
+      },
+      "events": [],
       "disabledEvents": []
     }
   ],

@@ -234,8 +234,8 @@
     return make(canvas, {
       type: 'bar',
       data: { labels: years.map(function (y) { return y.age; }), datasets: [
-        ds('Federal', 0, function (y) { return y.taxDetail.federal; }),
-        ds('Provincial', 1, function (y) { return y.taxDetail.provincial; }),
+        ds('Federal', 0, function (y) { return y.federalTax; }),
+        ds('Provincial', 1, function (y) { return y.provincialTax; }),
         ds('CPP / EI', 2, function (y) { return y.payroll; }),
         ds('OAS clawback', 7, function (y) { return y.oasClawback; })
       ] },

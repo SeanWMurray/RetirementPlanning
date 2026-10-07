@@ -5,6 +5,7 @@
   'use strict';
   var ui = RP.ui, h = ui.h, fmt = RP.fmt;
   var selectedAge = null;
+  var selectedPerson = 0;   // couples: 0 = you, 1 = spouse
 
   function line(label, v, opts) {
     opts = opts || {};
@@ -54,7 +55,11 @@
     if (total > 0 && free / total > 0.3) why.push(fmt.pct(free / total, 0) + ' of this year’s cash came from tax-free sources (TFSA, cash, non-taxable income).');
     if (partly > 0.5) why.push('Non-registered withdrawals are taxed only on the gain portion, and only half of a capital gain is taxable.');
     if (y.distributions > 0.5) why.push('Tax also includes ' + fmt.money(y.distributions) + ' of reinvested non-registered distributions (dividends, interest, fund distributions), taxed this year even though no cash was withdrawn.');
-    if (y.taxDetail.taxableIncome < 60000 && y.taxDetail.taxableIncome > 0) why.push('Taxable income is ' + fmt.money(y.taxDetail.taxableIncome) + ', and the basic personal' + (y.age >= 65 ? ', age and pension' : '') + ' amounts shelter the first part of it.');
+    if (y.taxPeople) {
+      var spName = (plan.spouse && plan.spouse.name) || 'your spouse';
+      why.push('Two tax returns: taxable income is ' + fmt.money(y.taxPeople[0].detail.taxableIncome) + ' for you and ' + fmt.money(y.taxPeople[1].detail.taxableIncome) + ' for ' + spName + ', and each of you has your own basic personal amount and brackets.');
+      if (Math.abs(y.pensionSplit) > 0.5) why.push(fmt.money(Math.abs(y.pensionSplit)) + ' of pension income was split ' + (y.pensionSplit > 0 ? 'from you to ' + spName : 'from ' + spName + ' to you') + ' to even out your incomes.');
+    } else if (y.taxDetail.taxableIncome < 60000 && y.taxDetail.taxableIncome > 0) why.push('Taxable income is ' + fmt.money(y.taxDetail.taxableIncome) + ', and the basic personal' + (y.age >= 65 ? ', age and pension' : '') + ' amounts shelter the first part of it.');
     return h('section.card',
       h('div.card-head', h('div', h('h3', 'Where the money came from — age ' + y.age), h('p.card-sub', 'Nominal dollars of ' + y.year + '. Explains why tax is high or low this year.'))),
       h('div.two-col.tight',
@@ -79,8 +84,15 @@
       if (args && args.age != null) selectedAge = args.age;
       if (selectedAge == null || !res.years.some(function (y) { return y.age === selectedAge; })) selectedAge = res.years[0].age;
       var y = res.years.filter(function (r) { return r.age === selectedAge; })[0];
-      var d = y.taxDetail, inp = y.taxInputs;
-      var marginal = RP.tax.marginal(inp, y.taxCtx, 'other');
+      var couple = !!y.taxPeople;
+      if (!couple) selectedPerson = 0;
+      var person = couple ? y.taxPeople[selectedPerson] : { detail: y.taxDetail, inputs: y.taxInputs, ctx: y.taxCtx };
+      var d = person.detail, inp = person.inputs;
+      var marginal = RP.tax.marginal(inp, person.ctx, 'other');
+      var spName = (plan.spouse && plan.spouse.name) || 'Spouse';
+      var personSel = couple ? ui.input({ type: 'select', label: 'Person', options: [{ value: 0, label: 'You (age ' + y.age + ')' }, { value: 1, label: spName + ' (age ' + y.spouseAge + ')' }] },
+        selectedPerson, function (v) { selectedPerson = Number(v); RP.app.renderTab(); }) : null;
+      var split = couple ? y.pensionSplit * (selectedPerson === 0 ? -1 : 1) : 0;   // + received, − given
 
       var ageSel = ui.input({ type: 'select', label: 'Age', options: res.years.map(function (r) { return { value: r.age, label: 'Age ' + r.age + ' (' + r.year + ')' }; }) },
         selectedAge, function (v) { selectedAge = Number(v); RP.app.renderTab(); });
@@ -92,6 +104,7 @@
         inp.pension ? line('Pension income (events)', inp.pension) : null,
         inp.other ? line('Other taxable income (events, interest, distributions)', inp.other) : null,
         inp.rrif ? line('RRSP / RRIF withdrawals', inp.rrif) : null,
+        Math.abs(split) > 0.5 ? line(split > 0 ? '   incl. pension income split received' : '   pension income split given (already deducted above)', Math.abs(split), { sub: true }) : null,
         inp.capitalGains ? line('Taxable capital gains', inp.capitalGains) : null,
         inp.dividends ? line('Eligible dividends (grossed up 38%)', inp.dividends * 1.38) : null,
         line('Total income', d.grossIncome, { total: true }),
@@ -108,6 +121,7 @@
         d.payroll.ei ? line('EI premiums', d.payroll.ei) : null,
         d.payroll.qpip ? line('QPIP premiums', d.payroll.qpip) : null,
         line('Total tax & contributions', d.totalWithPayroll, { total: true }),
+        couple ? line('Household total (both returns)', y.tax, { total: true }) : null,
         line('Average rate (of total income)', d.averageRate, { pct: true }),
         line('Marginal rate (next $ of ordinary income)', marginal, { pct: true })
       ];
@@ -117,8 +131,8 @@
       var canvas = h('canvas', { role: 'img', 'aria-label': 'Tax by year chart' });
       host.appendChild(h('div.two-col',
         h('section.card',
-          h('div.card-head', h('div', h('h3', 'Tax detail'), h('p.card-sub', plan.tax.mode === 'calculated' ? (RP.tax.dataFor(plan.tax.year).provinces[plan.profile.province].name + ' · ' + plan.tax.year + ' tables indexed to ' + y.year) : 'Override: ' + plan.tax.mode)),
-            ageSel),
+          h('div.card-head', h('div', h('h3', couple ? 'Tax detail — ' + (selectedPerson ? spName : 'You') : 'Tax detail'), h('p.card-sub', plan.tax.mode === 'calculated' ? (RP.tax.dataFor(plan.tax.year).provinces[plan.profile.province].name + ' · ' + plan.tax.year + ' tables indexed to ' + y.year) : 'Override: ' + plan.tax.mode)),
+            h('div.btn-row', personSel, ageSel)),
           h('table.grid.statement', h('tbody', rows)),
           plan.tax.mode === 'calculated' ? h('p.note', 'Credits claimed: federal ' + fmt.money(d.federalCredits) + ', provincial ' + fmt.money(d.provincialCredits) + ' (credit base before applying the lowest rate). Nominal dollars.') : null),
         h('section.card',
@@ -151,7 +165,7 @@
         h('p.note', 'Basic personal amount: federal ' + fmt.money(data.federal.bpa.max) + ', ' + prov.name + ' ' + fmt.money(prov.bpa.max) +
           '. Future years index these by the plan’s inflation rate' + (prov.indexed === false ? ' (' + prov.name + ' brackets are frozen)' : '') + '.'),
         verify.length ? h('div.callout', ui.icon('info'), h('span', 'Estimated values to verify: ' + verify.join(', ') + '. To correct them, edit js/data/tax-' + data.year + '.js.')) : null,
-        h('p.note', 'Not modelled: pension income splitting, non-eligible dividends, provincial low-income reductions (e.g. Ontario Tax Reduction), refundable credits, AMT and capital losses. Use a flat or custom rate if you need to approximate these.')));
+        h('p.note', 'Not modelled: non-eligible dividends, provincial low-income reductions (e.g. Ontario Tax Reduction), refundable credits, AMT and capital losses. Use a flat or custom rate if you need to approximate these.')));
     }
   });
 })(globalThis.RP);

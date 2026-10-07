@@ -254,6 +254,45 @@ var EXAMPLES = [
         s.events.push(ev(b, 'lumpSum', 60, { label: 'Inheritance', amount: 120000, taxType: 'nontaxable' }));
       } }
     ]
+  },
+
+  {
+    slug: 'couple-ottawa',
+    name: 'Dual-income couple — Ottawa',
+    summary: '46 and 44, Ontario, $118k and $64k salaries, separate RRSPs and TFSAs, a small DB pension for one spouse. Pension splitting, retiring at different times.',
+    notes: 'A couple planning together: Sam (46, $118k) and Jordan (44, $64k, with a small public-sector DB pension from 60). ' +
+      'Each has their own RRSP and TFSA; the non-registered account is in Sam’s name. Spending of $88k is for the household. ' +
+      'Open the Tax tab to see two returns and the pension income split each year. Scenarios: turning pension splitting off (to see what it saves), ' +
+      'Jordan retiring at 55, and both retiring at 57.',
+    build: function (b) {
+      Object.assign(b.profile, { currentAge: 46, retirementAge: 60, endAge: 95, province: 'ON' });
+      Object.assign(b.income, { salary: 118000, growth: 0.03 });
+      b.spouse = { enabled: true, name: 'Jordan', currentAge: 44, retirementAge: 60, salary: 64000, growth: 0.03,
+        cppEnabled: true, cppAt65: 9500, cppStartAge: 65, oasEnabled: true, oasStartAge: 65, oasResidency: 1 };
+      b.tax.pensionSplitting = true;
+      Object.assign(b.spending, { mode: 'total', total: 88000, retirementChange: -0.05 });
+      b.accounts = [
+        account('rrsp', 'Sam RRSP', 'rrsp', 210000, { contribLimit: 'legal', startingRoom: 20000 }),
+        account('tfsa', 'Sam TFSA', 'tfsa', 75000, { contribLimit: 'legal', startingRoom: 25000 }),
+        account('sp_rrsp', 'Jordan RRSP', 'rrsp', 60000, { owner: 'spouse', contribLimit: 'custom', contributionCap: 2500, startingRoom: 8000 }),
+        account('sp_tfsa', 'Jordan TFSA', 'tfsa', 55000, { owner: 'spouse', contribLimit: 'legal', startingRoom: 30000 }),
+        account('nonreg', 'Non-registered (Sam)', 'nonreg', 40000, { costBase: 32000, distYield: 0.02, distType: 'mix' })
+      ];
+      b.savings.order = ['rrsp', 'sp_rrsp', 'tfsa', 'sp_tfsa', 'nonreg'];
+      b.retirement.withdrawalOrder = ['nonreg', 'rrsp', 'sp_rrsp', 'tfsa', 'sp_tfsa'];
+      Object.assign(b.benefits, { cppAt65: 15000, cppStartAge: 65, oasStartAge: 65 });
+      b.events = [
+        ev(b, 'income', 62, { id: 'ev_couple_db', label: 'Jordan’s DB pension', amount: 16000, endAge: 95, taxType: 'pension', owner: 'spouse' }),
+        ev(b, 'expense', 60, { label: 'Travel while healthy', amount: 15000, endAge: 72 })
+      ];
+    },
+    scenarios: [
+      { name: 'No pension splitting', notes: 'The same plan with pension income splitting turned off, to show what it saves.',
+        build: function (s) { s.overrides['tax.pensionSplitting'] = false; } },
+      { name: 'Jordan retires at 55', build: function (s) { s.overrides['spouse.retirementAge'] = 55; } },
+      { name: 'Both retire at 57', notes: 'Sam at 57 and Jordan at 55 (the same calendar year).',
+        build: function (s) { s.overrides['profile.retirementAge'] = 57; s.overrides['spouse.retirementAge'] = 55; } }
+    ]
   }
 ];
 

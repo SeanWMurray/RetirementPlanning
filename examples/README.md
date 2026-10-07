@@ -93,3 +93,17 @@ A 52-year-old who started saving late and has a lot of unused RRSP and TFSA room
 | Cut spending 15% | $331k | $0 | runs short at 80 |
 | Inheritance at 60 | $337k | $0 | runs short at 76 |
 | All three: work to 67, spend less, inheritance | $517k | $269k | to 92 ✓ |
+
+## Dual-income couple — Ottawa
+
+A couple planning together: Sam (46, $118k) and Jordan (44, $64k, with a small public-sector DB pension from 60). Each has their own RRSP and TFSA; the non-registered account is in Sam’s name. Spending of $88k is for the household. Open the Tax tab to see two returns and the pension income split each year. Scenarios: turning pension splitting off (to see what it saves), Jordan retiring at 55, and both retiring at 57.
+
+- **Profile:** age 46, retiring at 60, planning to 95, Ontario
+- **File:** [`couple-ottawa.retirement-plan.json`](couple-ottawa.retirement-plan.json)
+
+| Scenario | Portfolio at retirement | Ending portfolio | Money lasts |
+|---|--:|--:|---|
+| Base plan | $1.89M | $2.15M | to 95 ✓ |
+| No pension splitting | $1.89M | $2.10M | to 95 ✓ |
+| Jordan retires at 55 | $1.69M | $1.33M | to 95 ✓ |
+| Both retire at 57 | $1.49M | $411k | to 95 ✓ |
