@@ -17,6 +17,14 @@
    * Explains why tax can be low (TFSA, return of capital, half-taxable gains, credits) or why a
    * year shows spending but little tax (a shortfall: the spending was not actually funded).
    */
+  function corpNote(pd, share) {
+    var parts = [];
+    if (pd.capital * share > 0.5) parts.push(fmt.money(pd.capital * share) + ' capital (tax-free)');
+    if (pd.eligible * share > 0.5) parts.push(fmt.money(pd.eligible * share) + ' eligible');
+    if (pd.nonEligible * share > 0.5) parts.push(fmt.money(pd.nonEligible * share) + ' non-eligible');
+    return parts.join(', ') + '; see the Corporation tab';
+  }
+
   function moneyFlow(y, plan) {
     var acctName = {}, acctType = {};
     plan.accounts.forEach(function (a) { acctName[a.id] = a.name; acctType[a.id] = a.type; });
@@ -30,11 +38,19 @@
     add('Employment income', y.employment, 'taxable');
     add('CPP / QPP', y.cpp, 'taxable');
     add('OAS', y.oas, 'taxable');
+    if (y.corp && y.corpDividends > 0.5) {
+      var pw = y.corp.dividendsPaid, share = (pw.capital + pw.eligible + pw.nonEligible) > 0 ? y.corpDividends / (pw.capital + pw.eligible + pw.nonEligible) : 0;
+      add('Dividends from the corporation', y.corpDividends, 'partly', corpNote(pw, share));
+    }
     (y.extraIncome || []).forEach(function (x) { add(x.label, x.amount, x.taxType === 'nontaxable' ? 'free' : 'taxable'); });
     Object.keys(y.withdrawByAccount || {}).forEach(function (id) {
       var w = y.withdrawByAccount[id];
       var t = acctType[id];
       if (t === 'rrsp') add('Withdrawal: ' + acctName[id], w, 'taxable', 'fully taxable');
+      else if (t === 'corp') {
+        var pd = y.corp ? y.corp.dividendsPaid : null, tot = pd ? pd.capital + pd.eligible + pd.nonEligible : 0;
+        add('Dividends: ' + acctName[id], w, 'partly', pd && tot > 0 ? corpNote(pd, w / tot) : 'paid as dividends');
+      }
       else if (t === 'nonreg') {
         var realized = y.realizedGains || 0;
         add('Withdrawal: ' + acctName[id], w, 'partly', fmt.money(realized * 2) + ' is capital gain, of which half (' + fmt.money(realized) + ') is taxable; the rest is your own cost base returned');
@@ -107,6 +123,7 @@
         Math.abs(split) > 0.5 ? line(split > 0 ? '   incl. pension income split received' : '   pension income split given (already deducted above)', Math.abs(split), { sub: true }) : null,
         inp.capitalGains ? line('Taxable capital gains', inp.capitalGains) : null,
         inp.dividends ? line('Eligible dividends (grossed up 38%)', inp.dividends * 1.38) : null,
+        inp.dividendsNE ? line('Non-eligible dividends (grossed up 15%)', inp.dividendsNE * 1.15) : null,
         line('Total income', d.grossIncome, { total: true }),
         inp.rrspDeduction ? line('RRSP deduction', -inp.rrspDeduction, { sub: true }) : null,
         d.payroll.deduction ? line('CPP enhanced deduction', -d.payroll.deduction, { sub: true }) : null,
@@ -165,7 +182,7 @@
         h('p.note', 'Basic personal amount: federal ' + fmt.money(data.federal.bpa.max) + ', ' + prov.name + ' ' + fmt.money(prov.bpa.max) +
           '. Future years index these by the plan’s inflation rate' + (prov.indexed === false ? ' (' + prov.name + ' brackets are frozen)' : '') + '.'),
         verify.length ? h('div.callout', ui.icon('info'), h('span', 'Estimated values to verify: ' + verify.join(', ') + '. To correct them, edit js/data/tax-' + data.year + '.js.')) : null,
-        h('p.note', 'Not modelled: non-eligible dividends, provincial low-income reductions (e.g. Ontario Tax Reduction), refundable credits, AMT and capital losses. Use a flat or custom rate if you need to approximate these.')));
+        h('p.note', 'Not modelled: provincial low-income reductions (e.g. Ontario Tax Reduction), refundable credits, AMT and capital losses. Use a flat or custom rate if you need to approximate these.')));
     }
   });
 })(globalThis.RP);

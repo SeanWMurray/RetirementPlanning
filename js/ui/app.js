@@ -34,7 +34,7 @@
     sub: function () { return 'first year'; } });
   K.register({ id: 'tax', label: 'Lifetime tax', better: -1, format: fmt.compact,
     value: function (r, real) { return real ? r.summary.lifetimeTaxReal : r.summary.lifetimeTax; },
-    sub: function () { return 'incl. CPP/EI, clawback'; } });
+    sub: function (r) { return r.plan.accounts.some(function (a) { return a.type === 'corp'; }) ? 'incl. corporate, CPP/EI, clawback' : 'incl. CPP/EI, clawback'; } });
 
   // ---------------------------------------------------------------------------
   // Menus
@@ -92,7 +92,7 @@
       { label: 'Layout: Phone', checked: layout === 'phone', onclick: function () { setLayout('phone'); } },
       { separator: true }
     ];
-    RP.tabs.list().forEach(function (t, i) {
+    app.visibleTabs().forEach(function (t, i) {
       items.push({ label: t.label, hint: 'Alt+' + (i + 1), checked: st.activeTab === t.id, onclick: function () { app.showTab(t.id); } });
     });
     return items;
@@ -243,15 +243,21 @@
     else if (mod && k === 'p') { e.preventDefault(); printPlan(); }
     else if (mod && k === 'b') { e.preventDefault(); toggleSidebar(); }
     else if (e.altKey && /^[1-9]$/.test(e.key)) {
-      var t = RP.tabs.list()[Number(e.key) - 1];
+      var t = app.visibleTabs()[Number(e.key) - 1];
       if (t) { e.preventDefault(); app.showTab(t.id); }
     }
   }
 
+  /** Tabs may define when(plan) to appear only when relevant (e.g. the Corporation tab). */
+  app.visibleTabs = function () {
+    var plan = RP.store.effective();
+    return RP.tabs.list().filter(function (t) { return !t.when || t.when(plan); });
+  };
+
   function onStore(kind) {
     if (kind === 'structure') { renderInputs(); renderToolbarState(); renderStatus(); }
     else if (kind === 'data') { ui.refreshFieldStates(els.inputs); ui.refreshSummaries(els.inputs); renderToolbarState(); }
-    else if (kind === 'results') { renderKpis(); app.renderTab(); renderToolbarState(); renderStatus(); }
+    else if (kind === 'results') { renderKpis(); renderTabs(); app.renderTab(); renderToolbarState(); renderStatus(); }
     else if (kind === 'settings') { renderKpis(); app.renderTab(); renderToolbarState(); renderStatus(); }
     else if (kind === 'saved') renderStatus();
   }
@@ -490,7 +496,7 @@
   function renderTabs() {
     ui.clear(els.tabs);
     var cur = RP.store.doc.settings.activeTab;
-    RP.tabs.list().forEach(function (t) {
+    app.visibleTabs().forEach(function (t) {
       els.tabs.appendChild(h('button.tab' + (t.id === cur ? '.active' : ''), {
         type: 'button', role: 'tab', 'aria-selected': String(t.id === cur), onclick: function () { app.showTab(t.id); }
       }, t.label));
@@ -512,7 +518,8 @@
 
   app.renderTab = function () {
     var id = RP.store.doc.settings.activeTab;
-    var tab = RP.tabs.get(id) || RP.tabs.list()[0];
+    var tab = RP.tabs.get(id);
+    if (!tab || app.visibleTabs().indexOf(tab) < 0) tab = app.visibleTabs()[0];
     if (!RP.store.results) return;
     var scroll = els.tab.scrollTop;
     var wraps = Array.prototype.map.call(els.tab.querySelectorAll('.table-wrap'), function (w) { return [w.scrollTop, w.scrollLeft]; });

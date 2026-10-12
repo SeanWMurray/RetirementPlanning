@@ -20,8 +20,12 @@
   c({ id: 'cpp', label: 'CPP', group: 'Income', kind: 'flow', get: function (y) { return y.cpp; }, default: true });
   c({ id: 'oas', label: 'OAS', group: 'Income', kind: 'flow', get: function (y) { return y.oas; }, default: true });
   c({ id: 'otherIncome', label: 'Other income', group: 'Income', kind: 'flow', get: function (y) { return y.otherIncome; }, default: true, title: 'Income and lump-sum events' });
+  c({ id: 'corpDividends', label: 'Corp dividends', group: 'Income', kind: 'flow', get: function (y) { return y.corpDividends; }, default: true,
+    title: 'Dividends paid to you by the corporation while the business runs (draws in retirement are under Withdrawn)', when: function (plan) { return plan.accounts.some(function (a) { return a.type === 'corp'; }); } });
   c({ id: 'incomeTotal', label: 'Total income', group: 'Income', kind: 'flow', get: function (y) { return y.incomeTotal; }, default: false });
   c({ id: 'tax', label: 'Tax', group: 'Tax', kind: 'flow', get: function (y) { return y.tax; }, default: true, title: 'Income tax + CPP/EI + OAS clawback' });
+  c({ id: 'corpTax', label: 'Corporate tax', group: 'Tax', kind: 'flow', get: function (y) { return y.corpTax; }, default: true,
+    title: 'Corporate tax net of dividend refunds (not included in Tax)', when: function (plan) { return plan.accounts.some(function (a) { return a.type === 'corp'; }); } });
   c({ id: 'incomeTax', label: 'Income tax', group: 'Tax', kind: 'flow', get: function (y) { return y.incomeTax; }, default: false });
   c({ id: 'payroll', label: 'CPP/EI contrib.', group: 'Tax', kind: 'flow', get: function (y) { return y.payroll; }, default: false });
   c({ id: 'oasClawback', label: 'OAS clawback', group: 'Tax', kind: 'flow', get: function (y) { return y.oasClawback; }, default: false });

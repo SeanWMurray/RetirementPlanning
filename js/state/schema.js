@@ -30,6 +30,11 @@
     return {
       profile: { currentAge: 35, retirementAge: 60, endAge: 95, province: 'ON', startYear: new Date().getFullYear() },
       income: { salary: 100000, growth: 0.03 },
+      // Optional corporation (CCPC). Used when the plan has an account of type 'corp' (its investments).
+      corporation: {
+        activeIncome: 0, growth: 0.03, endAge: null, salaryFromCorp: true,
+        dividendsWorking: 0, dividendsIndexed: true, windUpYears: 5
+      },
       // Optional spouse/partner. Ages are the spouse's own; the plan's timeline follows your age.
       spouse: {
         enabled: false, name: 'Spouse', currentAge: 35, retirementAge: 60, salary: 70000, growth: 0.03,
@@ -187,7 +192,8 @@
     { value: 'rrsp', label: 'RRSP / RRIF / LIRA (tax-deferred)' },
     { value: 'tfsa', label: 'TFSA (tax-free)' },
     { value: 'nonreg', label: 'Non-registered (capital gains)' },
-    { value: 'cash', label: 'Cash / HISA (interest)' }
+    { value: 'cash', label: 'Cash / HISA (interest)' },
+    { value: 'corp', label: 'Corporation (CCPC investments)' }
   ];
 
   // ---------------------------------------------------------------------------
@@ -199,7 +205,7 @@
   var ENUMS = {
     'tax.mode': ['calculated', 'flat', 'custom'],
     'spending.mode': ['total', 'itemized'],
-    'account.type': ['rrsp', 'tfsa', 'nonreg', 'cash'],
+    'account.type': ['rrsp', 'tfsa', 'nonreg', 'cash', 'corp'],
     'account.contribLimit': ['legal', 'custom', 'unlimited', 'none'],
     'item.phase': ['all', 'working', 'retired'],
     taxType: ['other', 'pension', 'nontaxable'],
@@ -217,7 +223,7 @@
     ['income.growth', -0.2, 0.3], ['assumptions.inflation', -0.05, 0.2], ['assumptions.returnPre', -0.5, 0.3],
     ['assumptions.returnPost', -0.5, 0.3], ['assumptions.cashReturn', -0.1, 0.2], ['assumptions.volatility', 0, 0.6],
     ['spending.retirementChange', -1, 2], ['spending.growthWorking', -0.2, 0.2], ['spending.growthRetired', -0.2, 0.2], ['savings.rate', 0, 1], ['savings.rateStep', -0.1, 0.1], ['savings.rateMax', 0, 1], ['savings.amountGrowth', -0.5, 0.5], ['retirement.withdrawalRate', 0, 0.5],
-    ['tax.flatRate', 0, 0.9], ['benefits.oasResidency', 0, 1], ['spouse.growth', -0.2, 0.3], ['spouse.oasResidency', 0, 1]
+    ['tax.flatRate', 0, 0.9], ['benefits.oasResidency', 0, 1], ['spouse.growth', -0.2, 0.3], ['spouse.oasResidency', 0, 1], ['corporation.growth', -0.5, 0.5]
   ];
 
   schema.validate = function (doc) {
@@ -225,6 +231,7 @@
     function err(path, msg) { out.push({ level: 'error', path: path, message: msg }); }
     function warn(path, msg) { out.push({ level: 'warning', path: path, message: msg }); }
     function isNum(v) { return typeof v === 'number' && isFinite(v); }
+    function num0(v) { return isNum(v) ? v : 0; }
     function oneOf(path, v, list) { if (list.indexOf(v) < 0) err(path, 'must be one of ' + list.map(function (x) { return '"' + x + '"'; }).join(', ') + ' (got ' + JSON.stringify(v) + ')'); }
 
     function checkPlan(p, prefix) {
@@ -293,6 +300,22 @@
         if (a.type === 'nonreg' && a.costBase != null && isNum(a.costBase) && isNum(a.balance) && a.costBase > a.balance * 3) warn(ap + '.costBase', 'is much larger than the balance; check it is the adjusted cost base');
       });
       if (!(p.accounts || []).length) warn(prefix + 'accounts', 'no accounts: savings have nowhere to go');
+      var corps = (p.accounts || []).filter(function (a) { return a.type === 'corp'; });
+      if (corps.length > 1) warn(prefix + 'accounts', 'only one corporation is modelled; business income and dividends use "' + corps[0].id + '"');
+      corps.forEach(function (a) {
+        var i = p.accounts.indexOf(a);
+        ['cda', 'grip', 'erdtoh', 'nerdtoh'].forEach(function (k) {
+          if (a[k] != null && (!isNum(a[k]) || a[k] < 0)) err(prefix + 'accounts.' + i + '.' + k, 'must be a number ≥ 0 (dollars)');
+        });
+      });
+      var co = p.corporation;
+      if (co) {
+        if (co.activeIncome != null && (!isNum(co.activeIncome) || co.activeIncome < 0)) err(prefix + 'corporation.activeIncome', 'must be a number ≥ 0 (annual business income before your salary, today’s dollars)');
+        if (co.dividendsWorking != null && (!isNum(co.dividendsWorking) || co.dividendsWorking < 0)) err(prefix + 'corporation.dividendsWorking', 'must be a number ≥ 0');
+        if (co.windUpYears != null && (!isNum(co.windUpYears) || co.windUpYears < 1 || co.windUpYears > 30)) err(prefix + 'corporation.windUpYears', 'must be a whole number from 1 to 30');
+        if (co.endAge != null && co.endAge !== '' && !isNum(co.endAge)) err(prefix + 'corporation.endAge', 'must be an age or null');
+        if (!corps.length && (num0(co.activeIncome) > 0 || num0(co.dividendsWorking) > 0)) warn(prefix + 'corporation', 'has business income or dividends but there is no account of type "corp", so it is ignored');
+      }
       [['savings.order', p.savings && p.savings.order], ['retirement.withdrawalOrder', p.retirement && p.retirement.withdrawalOrder]].forEach(function (o) {
         (o[1] || []).forEach(function (id) { if (!ids[id]) warn(prefix + o[0], 'refers to unknown account id "' + id + '"'); });
       });

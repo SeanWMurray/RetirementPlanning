@@ -15,7 +15,7 @@ var vm = require('vm');
 
 var ROOT = path.join(__dirname, '..');
 [
-  'js/core.js', 'js/data/tax-2026.js', 'js/engine/tax.js', 'js/engine/events.js',
+  'js/core.js', 'js/data/tax-2026.js', 'js/engine/tax.js', 'js/engine/corporation.js', 'js/engine/events.js',
   'js/engine/strategies.js', 'js/engine/projection.js', 'js/engine/scenarios.js', 'js/state/schema.js'
 ].forEach(function (f) { vm.runInThisContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), { filename: f }); });
 var RP = globalThis.RP;
@@ -253,6 +253,38 @@ var EXAMPLES = [
         s.overrides['profile.retirementAge'] = 67; s.overrides['benefits.cppStartAge'] = 70; s.overrides['spending.total'] = 37400;
         s.events.push(ev(b, 'lumpSum', 60, { label: 'Inheritance', amount: 120000, taxType: 'nontaxable' }));
       } }
+    ]
+  },
+
+  {
+    slug: 'incorporated-physician-toronto',
+    name: 'Incorporated physician — Toronto',
+    summary: '42, Ontario, $420k of business income in a professional corporation, paid by dividends, the rest invested in the corporation. Salary instead, retiring at 55, a longer payout.',
+    notes: 'A 42-year-old physician whose professional corporation earns $420k a year before paying her. She takes $160k a year as dividends and leaves the rest invested inside the corporation, ' +
+      'which already holds $650k (cost base $480k) with CDA, GRIP and refundable tax balances. In retirement she draws on the corporation first. ' +
+      'The Corporation tab shows corporate tax, the CDA/GRIP/ERDTOH/NERDTOH pools each year, and what she would keep after all taxes if she extracted everything. ' +
+      'Scenarios: a $120k salary (with RRSP room and CPP) instead of most of the dividends, retiring at 55, and extracting over 10 years instead of 5.',
+    build: function (b) {
+      Object.assign(b.profile, { currentAge: 42, retirementAge: 62, endAge: 95, province: 'ON' });
+      Object.assign(b.income, { salary: 0, growth: 0.03 });
+      b.corporation = { activeIncome: 420000, growth: 0.025, endAge: null, salaryFromCorp: true, dividendsWorking: 160000, dividendsIndexed: true, windUpYears: 5 };
+      Object.assign(b.spending, { mode: 'total', total: 125000, retirementChange: -0.1 });
+      b.accounts = [
+        account('corp', 'Professional corporation', 'corp', 650000, { costBase: 480000, distYield: 0.02, distType: 'mix', cda: 25000, grip: 0, erdtoh: 4000, nerdtoh: 12000, contribLimit: 'none' }),
+        account('tfsa', 'TFSA', 'tfsa', 95000, { contribLimit: 'legal', startingRoom: 7000 }),
+        account('rrsp', 'RRSP', 'rrsp', 140000, { contribLimit: 'legal', startingRoom: 0 }),
+        account('nonreg', 'Non-registered', 'nonreg', 0, { costBase: 0 })
+      ];
+      b.savings.order = ['tfsa', 'rrsp', 'nonreg'];
+      b.retirement.withdrawalOrder = ['corp', 'nonreg', 'rrsp', 'tfsa'];
+      Object.assign(b.benefits, { cppAt65: 9000, cppStartAge: 65, oasStartAge: 67 });
+    },
+    scenarios: [
+      { name: 'Salary instead of dividends', notes: 'A $120k salary from the corporation (creating RRSP room and CPP) plus $40k of dividends.',
+        build: function (s) { s.overrides['income.salary'] = 120000; s.overrides['corporation.dividendsWorking'] = 40000; s.overrides['benefits.cppAt65'] = 14500; } },
+      { name: 'Retire at 55', build: function (s) { s.overrides['profile.retirementAge'] = 55; } },
+      { name: 'Extract over 10 years', notes: 'Only changes the “after tax if extracted” figures on the Corporation tab.',
+        build: function (s) { s.overrides['corporation.windUpYears'] = 10; } }
     ]
   },
 

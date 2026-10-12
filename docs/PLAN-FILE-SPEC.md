@@ -44,6 +44,7 @@ You are generating a JSON plan file for a deterministic Canadian retirement proj
 | Topic | Ask for | Default if unknown |
 |---|---|---|
 | Basics | Current age, target retirement age, province/territory | plan to age 95 |
+| Corporation | Do they own a CCPC (incorporated professional or business)? Business income before their salary, dividends they take, the corporation's investments, cost base and CDA/GRIP/ERDTOH/NERDTOH (from the T2) | no corporation |
 | Household | Single or a couple? For a couple: spouse's age, retirement age, salary, CPP estimate, and which accounts are whose | single |
 | Income | Gross annual employment income; expected raises; self-employed? | raises 2.5–3%/yr nominal |
 | Spending | Annual spending now (or a breakdown); change expected in retirement | about 55–65% of gross income; no change |
@@ -139,6 +140,22 @@ Add a spouse or common-law partner. Omit this object (or set `enabled: false`) f
 
 Each account belongs to one spouse (`account.owner`). Each spouse files a separate return; eligible pension income can be split between them (`tax.pensionSplitting`). The plan's `profile.retirementAge` (yours) still marks the switch from saving to drawing down.
 
+### `base.corporation` (optional)
+
+For an owner of a Canadian-controlled private corporation. It only applies when `base.accounts` has an account with `type: "corp"` (the corporation's investments; see below). Omit both for someone without a corporation.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `activeIncome` | number ≥ 0 | 0 | Net active business income per year **before** the owner's salary, in today's dollars. |
+| `growth` | rate | 0.03 | Annual growth of business income, nominal. |
+| `endAge` | integer or `null` | `null` | Last age (your age) with business income. `null` = until the owner retires. |
+| `salaryFromCorp` | boolean | `true` | The owner's salary (`income.salary`, or `spouse.salary` if the spouse owns the shares) is paid by the corporation: deducted from business income with the employer's CPP, and no EI. |
+| `dividendsWorking` | number ≥ 0 | 0 | Dividends paid to the owner each year while the business earns income, in today's dollars. Paid as capital dividends (CDA) first, then eligible up to GRIP, then non-eligible. |
+| `dividendsIndexed` | boolean | `true` | Grow `dividendsWorking` with inflation. |
+| `windUpYears` | integer 1–30 | 5 | For the "after tax if extracted" figures: years over which the corporation is paid out. |
+
+Business income left after corporate tax and dividends is invested in the corporation. To draw on the corporation in retirement, include its account id in `retirement.withdrawalOrder`; each draw is paid as dividends in the same order.
+
 ### `base.spending`
 
 | Field | Type | Default | Description |
@@ -170,8 +187,9 @@ One-off or temporary costs (a car, a wedding, kids) are better modelled as **eve
 |---|---|---|
 | `id` | string | Unique id, referenced by `savings.order`, `retirement.withdrawalOrder` and contribution events. |
 | `name` | string | Label. |
-| `type` | enum | `"rrsp"`: RRSP/RRIF/LIRA (tax-deductible contributions, fully taxable withdrawals, RRIF minimums from 72). `"tfsa"`: tax-free. `"nonreg"`: non-registered (growth taxed as capital gains on withdrawal, 50% inclusion). `"cash"`: savings/HISA/GIC (interest taxed every year). |
+| `type` | enum | `"rrsp"`: RRSP/RRIF/LIRA (tax-deductible contributions, fully taxable withdrawals, RRIF minimums from 72). `"tfsa"`: tax-free. `"nonreg"`: non-registered (growth taxed as capital gains on withdrawal, 50% inclusion). `"cash"`: savings/HISA/GIC (interest taxed every year). `"corp"`: investments held inside the owner's corporation (at most one; uses `costBase`, `distYield`, `distType`, and the pools below; never takes personal savings). |
 | `balance` | number ≥ 0 | Current balance. |
+| `cda`, `grip`, `erdtoh`, `nerdtoh` | number ≥ 0 | `corp` only: current capital dividend account, general rate income pool, and eligible / non-eligible refundable dividend tax on hand (from the T2 schedules). Default 0. |
 | `owner` | enum | Couples only: `"self"` (default) or `"spouse"`. RRSP room, RRIF minimums, withdrawals, deductions and investment income are taxed on the owner's return. Give each spouse their own RRSP and TFSA. |
 | `costBase` | number | `nonreg` only: adjusted cost base (ACB). Default = balance. |
 | `distYield` | rate | `nonreg` only: taxable distributions per year as a share of the balance (dividends, interest, fund distributions), e.g. `0.02`. Part of the account's return (not extra), taxed in the year received, reinvested, and added to the ACB. Default `0` if omitted; `0.015`–`0.03` is typical for balanced or dividend portfolios. |
@@ -377,6 +395,7 @@ The planner checks every file it opens. Errors are shown with the field path. Ma
 |---|---|
 | Defined-benefit pension | `income` event, `taxType: "pension"`, from pension start to `endAge`. Add a second event for a bridge benefit ending at 64. Set the RRSP to `contribLimit: "custom"` with a small amount, because pension adjustments reduce RRSP room. |
 | Buying a home | `expense` for the down payment and closing costs at the purchase age, plus a `spending` `adjustment` for the change in housing costs. |
+| Incorporated professional / business owner | Add a `corp` account with the corporation's investments, ACB and pools, and set `corporation.activeIncome` and `dividendsWorking` (or a salary with `salaryFromCorp: true`). Put `"corp"` in `retirement.withdrawalOrder` where they'd draw on it. |
 | Couple | Set `spouse.enabled: true` with the spouse's age, retirement age, salary and CPP/OAS. Give each spouse their own RRSP and TFSA with `owner`; joint non-registered accounts can go to the higher earner or be split into two accounts. Keep `tax.pensionSplitting: true`. A spouse's DB pension is an `income` event with `owner: "spouse"`. |
 | Selling or downsizing a home | `lumpSum`, `taxType: "nontaxable"` (principal residence), net of costs. |
 | Children | `expense` with an age range (e.g. $15,000/yr for 18 years). RESP contributions can be an `expense` too. |
@@ -407,8 +426,9 @@ The planner checks every file it opens. Errors are shown with the field path. Ma
 
 - Couples are basic: both spouses are assumed to live to the end of the plan (no survivor benefits, RRSP/RRIF rollover or single-person household after a death), and there are no spousal RRSPs or attribution, CPP sharing or spousal credits. The plan ends at your `endAge`.
 - Non-registered growth beyond the distribution yield is treated as deferred capital gains. Foreign dividends should be entered as `interest`. Return of capital isn't modelled.
+- Corporations are simplified: one corporation and one shareholder, no associated corporations, safe income/section 55, TOSI, losses or the Quebec 5,500-hour test.
 - RRSP room ignores pension adjustments. The RRSP maximum is indexed with inflation.
-- Not modelled: non-eligible dividends, AMT, provincial low-income reductions, refundable credits, capital losses, the Home Buyers' Plan, LIRA unlocking rules, GIS.
+- Not modelled: AMT, provincial low-income reductions, refundable credits, capital losses, the Home Buyers' Plan, LIRA unlocking rules, GIS.
 - CPP is the user's estimate at 65, indexed with inflation, not computed from their contribution history.
 - Some 2026 credit amounts are estimates (see the planner's Tax tab).
 

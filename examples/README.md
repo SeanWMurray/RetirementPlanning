@@ -94,6 +94,20 @@ A 52-year-old who started saving late and has a lot of unused RRSP and TFSA room
 | Inheritance at 60 | $337k | $0 | runs short at 76 |
 | All three: work to 67, spend less, inheritance | $517k | $269k | to 92 ✓ |
 
+## Incorporated physician — Toronto
+
+A 42-year-old physician whose professional corporation earns $420k a year before paying her. She takes $160k a year as dividends and leaves the rest invested inside the corporation, which already holds $650k (cost base $480k) with CDA, GRIP and refundable tax balances. In retirement she draws on the corporation first. The Corporation tab shows corporate tax, the CDA/GRIP/ERDTOH/NERDTOH pools each year, and what she would keep after all taxes if she extracted everything. Scenarios: a $120k salary (with RRSP room and CPP) instead of most of the dividends, retiring at 55, and extracting over 10 years instead of 5.
+
+- **Profile:** age 42, retiring at 62, planning to 95, Ontario
+- **File:** [`incorporated-physician-toronto.retirement-plan.json`](incorporated-physician-toronto.retirement-plan.json)
+
+| Scenario | Portfolio at retirement | Ending portfolio | Money lasts |
+|---|--:|--:|---|
+| Base plan | $8.50M | $12.93M | to 95 ✓ |
+| Salary instead of dividends | $8.19M | $12.37M | to 95 ✓ |
+| Retire at 55 | $5.20M | $6.40M | to 95 ✓ |
+| Extract over 10 years | $8.50M | $12.93M | to 95 ✓ |
+
 ## Dual-income couple — Ottawa
 
 A couple planning together: Sam (46, $118k) and Jordan (44, $64k, with a small public-sector DB pension from 60). Each has their own RRSP and TFSA; the non-registered account is in Sam’s name. Spending of $88k is for the household. Open the Tax tab to see two returns and the pension income split each year. Scenarios: turning pension splitting off (to see what it saves), Jordan retiring at 55, and both retiring at 57.

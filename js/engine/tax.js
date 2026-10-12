@@ -11,6 +11,7 @@
  *     cpp, oas,        // government benefits (gross)
  *     capitalGains,    // TAXABLE portion of capital gains (already multiplied by inclusion rate)
  *     dividends,       // eligible Canadian dividends received (actual cash; grossed up here)
+ *     dividendsNE,     // non-eligible dividends received (actual cash; grossed up 15% here), e.g. from your own CCPC
  *     rrspDeduction    // RRSP contributions deducted this year
  *   }
  *   ctx = {
@@ -98,7 +99,8 @@
       out.baseCredit = base;
       out.deduction = enh + tier2;
       var eiRate = prov.usesQPP ? d.ei.rateQC : d.ei.rate;
-      out.ei = Math.min(employment, d.ei.maxInsurable * idx) * eiRate;
+      // Owner-managers (more than 40% of the voting shares) can't be insured for EI on salary from their corporation.
+      out.ei = ctx.noEI ? 0 : Math.min(employment, d.ei.maxInsurable * idx) * eiRate;
       if (prov.usesQPP) out.qpip = Math.min(employment, d.qpip.maxInsurable * idx) * d.qpip.rate;
     }
     out.total = out.cpp + out.cpp2 + out.ei + out.qpip;
@@ -147,13 +149,15 @@
 
     var employment = num(inc.employment), other = num(inc.other), pension = num(inc.pension),
         rrif = num(inc.rrif), cpp = num(inc.cpp), oas = num(inc.oas),
-        cg = num(inc.capitalGains), rrspDed = num(inc.rrspDeduction), div = num(inc.dividends);
+        cg = num(inc.capitalGains), rrspDed = num(inc.rrspDeduction), div = num(inc.dividends), divNE = num(inc.dividendsNE);
     // Eligible dividends are grossed up into income (calculated mode) and earn the dividend tax credit.
     var divDef = d.federal.eligibleDividend || { grossUp: 0.38, credit: 0.150198 };
     var grossedDiv = (s.mode || 'calculated') === 'calculated' ? div * (1 + divDef.grossUp) : div;
+    var neDef = d.federal.nonEligibleDividend || { grossUp: 0.15, credit: 0.090301 };
+    var grossedNE = (s.mode || 'calculated') === 'calculated' ? divNE * (1 + neDef.grossUp) : divNE;
 
     var payroll = tax.payroll(employment, ctx);
-    var gross = employment + other + pension + rrif + cpp + oas + cg + grossedDiv;
+    var gross = employment + other + pension + rrif + cpp + oas + cg + grossedDiv + grossedNE;
     var netIncome = Math.max(0, gross - rrspDed - payroll.deduction);
 
     var clawback = 0;
@@ -188,7 +192,7 @@
         Math.min(employment, f.canadaEmployment.amount * idx) +
         payroll.baseCredit + payroll.ei + payroll.qpip;
       var fGross = tax.bracketTax(taxable, f.brackets, idx);
-      var fDtc = grossedDiv * divDef.credit;
+      var fDtc = grossedDiv * divDef.credit + grossedNE * neDef.credit;
       var fed = Math.max(0, fGross - fCredits * f.creditRate - fDtc);
       if (fDtc) st.lines.push({ label: 'Federal dividend tax credit', amount: -Math.min(fDtc, Math.max(0, fGross - fCredits * f.creditRate)) });
       if (prov.federalAbatement) {
@@ -208,7 +212,7 @@
         provPension +
         payroll.baseCredit + payroll.ei + payroll.qpip;
       var pBasic = tax.bracketTax(taxable, prov.brackets, pIdx) - pCredits * pRate;
-      var pDtc = grossedDiv * num(prov.dividendCredit, 0);
+      var pDtc = grossedDiv * num(prov.dividendCredit, 0) + grossedNE * num(prov.dividendCreditNE, 0);
       st.provincial = Math.max(0, pBasic - pDtc);
       if (pDtc) st.lines.push({ label: 'Provincial dividend tax credit', amount: -Math.min(pDtc, Math.max(0, pBasic)) });
       st.provincialCredits = pCredits;

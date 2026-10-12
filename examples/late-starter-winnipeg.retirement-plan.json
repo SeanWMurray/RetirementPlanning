@@ -20,6 +20,15 @@
       "salary": 68000,
       "growth": 0.02
     },
+    "corporation": {
+      "activeIncome": 0,
+      "growth": 0.03,
+      "endAge": null,
+      "salaryFromCorp": true,
+      "dividendsWorking": 0,
+      "dividendsIndexed": true,
+      "windUpYears": 5
+    },
     "spouse": {
       "enabled": false,
       "name": "Spouse",

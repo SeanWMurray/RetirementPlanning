@@ -26,6 +26,10 @@
  *     RRSP room, RRIF minimums and tax return; spending, the timeline and the retirement phase are the
  *     household's, keyed to your age. Eligible pension income can be split (up to 50%) to lower the
  *     household's tax. Survivorship (one partner dying first) is not modelled.
+ *   - Corporation (an account of type 'corp' plus plan.corporation): active business income is taxed in
+ *     the corporation (see corporation.js), the after-tax remainder is invested there, and money reaches
+ *     you as dividends (capital, eligible, non-eligible), either yearly while working or when you draw on
+ *     the corporation like any other account. Pools (CDA, GRIP, ERDTOH, NERDTOH) are tracked every year.
  *
  * opts:
  *   returnShocks: number[] — per-year deviation added to market returns (Monte Carlo)
@@ -155,6 +159,17 @@
     return best;
   };
 
+  /** fn(extra) -> additional personal tax when `extra` dividends are added to `base` income. */
+  engine.extraTax = function (base, ctx) {
+    var t0 = RP.tax.compute(base || {}, ctx).totalWithPayroll;
+    return function (extra) {
+      var inc = Object.assign({}, base || {});
+      inc.dividends = num(inc.dividends) + num(extra.dividends);
+      inc.dividendsNE = num(inc.dividendsNE) + num(extra.dividendsNE);
+      return RP.tax.compute(inc, ctx).totalWithPayroll - t0;
+    };
+  };
+
   /** Prior-year earned income used for the first year's RRSP room estimate. */
   function salary0Initial(plan) {
     return num(plan.income.salary) / (1 + num(plan.income.growth));
@@ -189,16 +204,29 @@
       return {
         id: a.id, name: a.name, type: a.type, owner: couple && a.owner === 'spouse' ? 1 : 0,
         bal: Math.max(0, num(a.balance)),
-        acb: a.type === 'nonreg' ? Math.max(0, num(a.costBase, num(a.balance))) : 0,
+        acb: a.type === 'nonreg' || a.type === 'corp' ? Math.max(0, num(a.costBase, num(a.balance))) : 0,
         returnRate: a.returnRate === '' || a.returnRate == null ? null : num(a.returnRate),
         cap: a.contributionCap === '' || a.contributionCap == null ? null : num(a.contributionCap),
         limitMode: engine.limitMode(a),
         startingRoom: a.startingRoom === '' || a.startingRoom == null ? null : Math.max(0, num(a.startingRoom)),
-        distYield: a.type === 'nonreg' ? Math.max(0, num(a.distYield, 0)) : 0,
+        distYield: a.type === 'nonreg' || a.type === 'corp' ? Math.max(0, num(a.distYield, 0)) : 0,
         distType: a.distType || 'mix', dist: 0,
+        pools: a.type === 'corp' ? { cda: Math.max(0, num(a.cda)), grip: Math.max(0, num(a.grip)), erdtoh: Math.max(0, num(a.erdtoh)), nerdtoh: Math.max(0, num(a.nerdtoh)) } : null,
         room: null, wPrev: 0
       };
     });
+
+    // Corporation: the first 'corp' account holds its investments; plan.corporation describes the business.
+    var CO = plan.corporation || {};
+    var corpAcct = accts.filter(function (a) { return a.type === 'corp'; })[0] || null;
+    var corpRates = corpAcct ? RP.corp.rates(d, prof.province) : null;
+    var corpSalary = !!corpAcct && CO.salaryFromCorp !== false;
+    var prevAAII = 0;
+    if (corpAcct) {
+      // Estimate last year's investment income from the starting portfolio, for the first year's business limit.
+      var mix0 = DIST_MIX[corpAcct.distType] || DIST_MIX.mix;
+      prevAAII = corpAcct.bal * corpAcct.distYield * (mix0.interest + mix0.gains * cgInc);
+    }
     var enforceRoom = plan.savings.enforceRoom !== false;
     var limits = d.limits || {};
     var prevEmp = [salary0Initial(plan), spSalary0 / (1 + spGrowth)];   // last year's employment income, per person
@@ -223,6 +251,36 @@
     var growth = num(plan.income.growth);
     var shocks = opts.returnShocks;
     var spendIdx = 1;   // growth index for base spending (equals cpi unless spending growth is set)
+
+    /** Year-end corporate figures, after the year's draws are known. Mutates the account's pools. */
+    function corpYear(ca, cy, drawn) {
+      var P = ca.pools;
+      var splitD = RP.corp.splitDividend(drawn, { cda: ca.cdaAvail, grip: ca.gripAvail });
+      var bizCash = cy.abi - cy.biz.tax - cy.divW;          // business cash left after tax and working dividends
+      var sale = Math.min(ca.start, drawn + Math.max(0, -bizCash));
+      var realized = ca.start > 0 ? sale * Math.max(0, 1 - ca.acb / ca.start) : 0;
+      var mix = DIST_MIX[ca.distType] || DIST_MIX.mix;
+      var dI = ca.dist * mix.interest, dD = ca.dist * mix.dividends, dG = ca.dist * mix.gains;
+      var gains = realized + dG;
+      var inv = RP.corp.investmentTax(dI + gains * cgInc, dD, corpRates);
+      var paid = {
+        capital: cy.splitW.capital + splitD.capital, eligible: cy.splitW.eligible + splitD.eligible,
+        nonEligible: cy.splitW.nonEligible + splitD.nonEligible
+      };
+      P.cda = Math.max(0, P.cda + gains * (1 - cgInc) - paid.capital);
+      P.grip = Math.max(0, P.grip + cy.biz.gripAdd + inv.gripAdd - paid.eligible);
+      P.erdtoh += inv.erdtohAdd; P.nerdtoh += inv.nerdtohAdd;
+      var refund = RP.corp.dividendRefund(paid, P, corpRates);
+      P.erdtoh -= refund.fromErdtoh; P.nerdtoh -= refund.fromNerdtoh;
+      prevAAII = inv.aaii;
+      return {
+        sale: sale, invested: Math.max(0, bizCash), cashAdjust: refund.total - inv.aaiiTax - inv.partIV,
+        realizedGain: realized, distributions: ca.dist, interest: dI, dividendsReceived: dD, gainsDistributed: dG,
+        aaii: inv.aaii, aaiiTax: inv.aaiiTax, partIV: inv.partIV, refund: refund.total,
+        paid: paid, drawn: drawn,
+        tax: cy.biz.tax + inv.aaiiTax + inv.partIV - refund.total
+      };
+    }
 
     for (var age = startAge, t = 0; age <= endAge; age++, t++) {
       var year = startYear + t;
@@ -329,6 +387,31 @@
       });
 
       // Interest on cash accounts is taxable annually (stays in the account).
+      // Corporation, part 1: business income, its tax, and dividends paid to the owner while it runs.
+      var cy = null;
+      if (corpAcct) {
+        var co = corpAcct.owner;
+        var active = CO.endAge === '' || CO.endAge == null ? ages[co] < (co ? spRetAge : retAge) : age <= num(CO.endAge);
+        var corpSal = corpSalary ? emp[co] : 0;
+        var erCpp = 0;
+        if (corpSal > 0) {
+          var pr = RP.tax.payroll(corpSal, { age: ages[co], province: prof.province, data: d, index: taxIdx, settings: plan.tax, noEI: true });
+          erCpp = plan.tax.selfEmployed ? 0 : pr.cpp + pr.cpp2;   // the employer's matching CPP, deductible to the corporation
+        }
+        var abiGross = active ? num(CO.activeIncome) * Math.pow(1 + num(CO.growth), t) : 0;
+        var abi = abiGross - corpSal - erCpp;
+        var biz = RP.corp.businessTax(abi, corpRates, prevAAII);
+        var mixC = DIST_MIX[corpAcct.distType] || DIST_MIX.mix;
+        var eligRecv = corpAcct.bal * corpAcct.distYield * mixC.dividends;
+        var divW = active ? num(CO.dividendsWorking) * (CO.dividendsIndexed === false ? 1 : cpi) : 0;
+        var P0 = corpAcct.pools;
+        var splitW = RP.corp.splitDividend(divW, { cda: P0.cda, grip: P0.grip + biz.gripAdd + eligRecv });
+        corpAcct.cdaAvail = P0.cda - splitW.capital;
+        corpAcct.gripAvail = P0.grip + biz.gripAdd + eligRecv - splitW.eligible;
+        cy = { active: active, owner: co, revenue: abiGross, salary: corpSal, employerCpp: erCpp, abi: abi, biz: biz, divW: divW, splitW: splitW };
+      }
+      y.corpDividends = cy ? cy.divW : 0;
+
       var interestBy = [0, 0];
       accts.forEach(function (a) { if (a.type === 'cash' && a.r > 0) interestBy[a.owner] += a.start * a.r; });
       var interest = interestBy[0] + interestBy[1];
@@ -338,7 +421,7 @@
       var distI = [0, 0], distD = [0, 0], distG = [0, 0];
       accts.forEach(function (a) {
         a.dist = a.distYield > 0 ? a.start * a.distYield : 0;
-        if (!a.dist) return;
+        if (!a.dist || a.type === 'corp') return;   // the corporation's own investment income is taxed in the corporation
         var mix = DIST_MIX[a.distType] || DIST_MIX.mix;
         distI[a.owner] += a.dist * mix.interest; distD[a.owner] += a.dist * mix.dividends; distG[a.owner] += a.dist * mix.gains;
       });
@@ -357,14 +440,17 @@
       }
       var rrifMin = rrifBy[0] + rrifBy[1];
 
-      var taxCtxs = [0, 1].map(function (p) { return { age: ages[p], province: prof.province, data: d, index: taxIdx, settings: plan.tax }; });
+      var taxCtxs = [0, 1].map(function (p) {
+        return { age: ages[p], province: prof.province, data: d, index: taxIdx, settings: plan.tax, noEI: corpSalary && corpAcct.owner === p };
+      });
       var inc0 = [0, 1].map(function (p) {
         return {
           employment: emp[p], other: exOther[p] + interestBy[p] + distI[p], pension: exPension[p],
-          cpp: ben[p].cpp, oas: ben[p].oas, rrif: rrifBy[p], capitalGains: distG[p] * cgInc, dividends: distD[p], rrspDeduction: 0
+          cpp: ben[p].cpp, oas: ben[p].oas, rrif: rrifBy[p], capitalGains: distG[p] * cgInc, dividends: distD[p], dividendsNE: 0, rrspDeduction: 0
         };
       });
-      var cashIn = y.employment + y.cpp + y.oas + exOther[0] + exOther[1] + exPension[0] + exPension[1] + exNonTax + rrifMin;
+      if (cy) { inc0[cy.owner].dividends += cy.splitW.eligible; inc0[cy.owner].dividendsNE += cy.splitW.nonEligible; }
+      var cashIn = y.employment + y.cpp + y.oas + exOther[0] + exOther[1] + exPension[0] + exPension[1] + exNonTax + rrifMin + y.corpDividends;
 
       // Tax for the household. `extra` holds per-person arrays [you, spouse] of rrif, capitalGains and
       // rrspDeduction on top of the year's base income. Returns { totalWithPayroll, people, incs, split }.
@@ -373,7 +459,8 @@
           return {
             employment: b.employment, other: b.other, pension: b.pension, cpp: b.cpp, oas: b.oas,
             rrif: b.rrif + at(extra.rrif, p), capitalGains: b.capitalGains + at(extra.capitalGains, p),
-            dividends: b.dividends, rrspDeduction: at(extra.rrspDeduction, p)
+            dividends: b.dividends + at(extra.dividends, p), dividendsNE: b.dividendsNE + at(extra.dividendsNE, p),
+            rrspDeduction: at(extra.rrspDeduction, p)
           };
         });
         if (!couple) {
@@ -386,6 +473,7 @@
       // How much each account can take this year: limit mode (or a contribution event), capped by room.
       function capacity(a, allowRRSP) {
         if (a.type === 'rrsp' && (!allowRRSP || ages[a.owner] > 71)) return 0;   // no RRSP contributions after 71
+        if (a.type === 'corp') return 0;   // the corporation is funded by its own business income
         var ov = y.mods.contrib[a.id];
         var mode = ov ? ov.mode : a.limitMode;
         var amt;
@@ -416,7 +504,7 @@
 
       // Draw gross G from accounts in withdrawal order. Returns taxable pieces.
       function draws(G) {
-        var res = { map: {}, rrif: 0, capitalGains: 0, rrifBy: [0, 0], cgBy: [0, 0], total: 0 };
+        var res = { map: {}, rrif: 0, capitalGains: 0, rrifBy: [0, 0], cgBy: [0, 0], eligBy: [0, 0], neBy: [0, 0], total: 0 };
         var left = G;
         for (var i = 0; i < withdrawOrder.length && left > 0.005; i++) {
           var a = withdrawOrder[i];
@@ -428,6 +516,10 @@
           else if (a.type === 'nonreg' && a.start > 0) {
             var g = amt * Math.max(0, 1 - a.acb / a.start) * cgInc;
             res.capitalGains += g; res.cgBy[a.owner] += g;
+          } else if (a.type === 'corp') {
+            // Drawing on the corporation means it pays you a dividend: capital, then eligible, then non-eligible.
+            var dv = RP.corp.splitDividend(amt, { cda: a.cdaAvail, grip: a.gripAvail });
+            res.eligBy[a.owner] += dv.eligible; res.neBy[a.owner] += dv.nonEligible;
           }
         }
         return res;
@@ -441,7 +533,7 @@
       // Solve for gross withdrawal giving net cash `need` (after the extra tax it causes).
       function solveWithdrawal(need, baseTax) {
         var maxG = available();
-        function net(G) { var dr = draws(G); return { n: G - (taxWith({ rrif: dr.rrifBy, capitalGains: dr.cgBy }).totalWithPayroll - baseTax), dr: dr }; }
+        function net(G) { var dr = draws(G); return { n: G - (taxWith({ rrif: dr.rrifBy, capitalGains: dr.cgBy, dividends: dr.eligBy, dividendsNE: dr.neBy }).totalWithPayroll - baseTax), dr: dr }; }
         var top = net(maxG);
         if (top.n <= need + 0.5) return { dr: top.dr, shortfall: Math.max(0, need - top.n) };
         var G = Math.min(maxG, need / 0.75), prevG = 0, prevN = 0, cur;
@@ -457,7 +549,7 @@
         return { dr: cur.dr, shortfall: 0 };
       }
 
-      var contrib = { map: {}, rrsp: 0, rrspBy: [0, 0] }, wd = { map: {}, rrif: 0, capitalGains: 0, rrifBy: [0, 0], cgBy: [0, 0], total: 0 };
+      var contrib = { map: {}, rrsp: 0, rrspBy: [0, 0] }, wd = { map: {}, rrif: 0, capitalGains: 0, rrifBy: [0, 0], cgBy: [0, 0], eligBy: [0, 0], neBy: [0, 0], total: 0 };
       var taxRes, C = 0, unallocated = 0, shortfall = 0;
       var target = retired ? strategy.grossTarget(y, plan, { state: stratState, startTotal: startTotal }) : savingsMode.target(y, plan);
       if (!retired && target != null && y.mods.savingsAdd) target = Math.max(0, target + y.mods.savingsAdd);
@@ -489,7 +581,7 @@
           // Deficit: draw from savings (C is 0 here).
           var sol = solveWithdrawal(-leftover, taxRes.totalWithPayroll);
           wd = sol.dr;
-          taxRes = taxWith({ rrspDeduction: contrib.rrspBy, rrif: wd.rrifBy, capitalGains: wd.cgBy });
+          taxRes = taxWith({ rrspDeduction: contrib.rrspBy, rrif: wd.rrifBy, capitalGains: wd.cgBy, dividends: wd.eligBy, dividendsNE: wd.neBy });
           // Reconcile against the final tax so cash always balances (covers any solver tolerance).
           var after = cashIn + wd.total - taxRes.totalWithPayroll - y.spending - C;
           if (after < -0.5) shortfall = -after; else unallocated = Math.max(0, after);
@@ -509,7 +601,7 @@
           var extraG = Math.max(0, target - rrifMin);
           wd = draws(extraG);
         }
-        taxRes = taxWith({ rrif: wd.rrifBy, capitalGains: wd.cgBy });
+        taxRes = taxWith({ rrif: wd.rrifBy, capitalGains: wd.cgBy, dividends: wd.eligBy, dividendsNE: wd.neBy });
         var cashNet = cashIn + wd.total - taxRes.totalWithPayroll - y.spending;
         if (cashNet > 0.5) {
           contrib = allocate(cashNet, false);   // reinvest surplus outside the RRSP
@@ -520,19 +612,25 @@
         }
       }
 
+      // Corporation, part 2: investment income, pools, dividend refund and corporate tax for the year.
+      var cr = null;
+      if (corpAcct) cr = corpYear(corpAcct, cy, wd.map[corpAcct.id] || 0);
+
       // 5. Growth
       var endTotal = 0, growthAmt = 0;
       accts.forEach(function (a) {
         var w = a.w + (wd.map[a.id] || 0);
         var c = contrib.map[a.id] || 0;
-        if (a.type === 'nonreg' && a.start > 0 && w > 0) a.acb -= a.acb * Math.min(1, w / a.start);
-        if (a.type === 'nonreg') a.acb += c + a.dist;   // reinvested distributions were already taxed
+        if (a === corpAcct) { w = cr.sale; c = cr.invested; }
+        if ((a.type === 'nonreg' || a.type === 'corp') && a.start > 0 && w > 0) a.acb -= a.acb * Math.min(1, w / a.start);
+        if (a.type === 'nonreg' || a.type === 'corp') a.acb += c + a.dist;   // reinvested distributions were already taxed
         var after = Math.max(0, a.start - w);
         // Each year's flows are stated at start-of-year prices (cpi). A contribution invested mid-year
         // therefore carries half a year of inflation as well as half a year of compound growth;
         // without the inflation half, savings would leak ~inf/2 in real terms every year.
         var end = after * (1 + a.r) + c * Math.sqrt((1 + a.r) * (1 + inf));
         growthAmt += end - after - c;
+        if (a === corpAcct) { end += cr.cashAdjust; w = wd.map[a.id] || 0; c = 0; }   // refunds in, investment taxes out; only your draws count as withdrawals
         a.bal = Math.max(0, end);
         a.wTotal = w; a.cTotal = c;
         if (a.room != null) a.room = Math.max(0, a.room - c);
@@ -544,7 +642,7 @@
       // 6. Record
       var totalW = rrifMin + wd.total;
       if (lite) {
-        years.push({ age: age, startTotal: startTotal, total: endTotal, real: endTotal / y.cpiEnd, shortfall: shortfall, tax: taxRes.totalWithPayroll, spending: y.spending, cpi: cpi, cpiEnd: y.cpiEnd });
+        years.push({ age: age, startTotal: startTotal, total: endTotal, real: endTotal / y.cpiEnd, shortfall: shortfall, tax: taxRes.totalWithPayroll, corpTax: cr ? cr.tax : 0, spending: y.spending, cpi: cpi, cpiEnd: y.cpiEnd });
         continue;
       }
       var balances = {}, contribs = {}, withdrawals = {}, room = {};
@@ -555,7 +653,7 @@
         t: t, age: age, year: year, cpi: cpi, cpiEnd: y.cpiEnd, retired: retired,
         spouseAge: couple ? ages[1] : null,
         employment: y.employment, cpp: y.cpp, oas: y.oas, otherIncome: y.otherIncome, interest: interest,
-        incomeTotal: y.employment + y.cpp + y.oas + y.otherIncome,
+        incomeTotal: y.employment + y.cpp + y.oas + y.otherIncome + y.corpDividends, corpDividends: y.corpDividends,
         spendingBase: y.spendingBase, eventExpenses: y.eventExpenses, spending: y.spending,
         extraIncome: y.extraIncome, extraExpenses: y.extraExpenses,
         tax: taxRes.totalWithPayroll, incomeTax: sumP(function (r) { return r.incomeTax; }), payroll: sumP(function (r) { return r.payroll.total; }),
@@ -566,6 +664,7 @@
         taxPeople: couple ? [0, 1].map(function (p) { return { detail: people[p], inputs: taxRes.incs[p], ctx: taxCtxs[p] }; }) : null,
         pensionSplit: taxRes.split,
         distributions: distInterest + distDividends + distGains, realizedGains: wd.capitalGains,
+        corpTax: cr ? cr.tax : 0, corp: cr ? corpRecord(corpAcct, cy, cr, taxCtxs[corpAcct.owner], taxRes.incs[corpAcct.owner]) : null,
         contributions: C, contribByAccount: contribs, roomByAccount: room, rrspContribution: contrib.rrsp,
         withdrawals: totalW, withdrawByAccount: withdrawals, rrifMin: rrifMin,
         unallocated: unallocated, shortfall: shortfall, growth: growthAmt,
@@ -573,6 +672,23 @@
         portfolioReturn: startTotal > 0 ? growthAmt / Math.max(1, startTotal - totalW + C / 2) : 0,
         activeEvents: y.activeEvents, mods: y.mods
       });
+    }
+
+    /** The corporation's year for the table and the Corporation tab, including its after-tax value if wound up. */
+    function corpRecord(ca, cy, cr, ctx, baseInc) {
+      var P = ca.pools;
+      var state = { balance: ca.bal, acb: ca.acb, cda: P.cda, grip: P.grip, erdtoh: P.erdtoh, nerdtoh: P.nerdtoh };
+      // Extra personal tax from the extraction dividends, on top of the owner's income this year.
+      var wu = RP.corp.windUp(state, { rates: corpRates, years: num(CO.windUpYears, 5), personalTax: engine.extraTax(baseInc, ctx) });
+      return {
+        active: cy.active, revenue: cy.revenue, salary: cy.salary, employerCpp: cy.employerCpp, businessIncome: cy.abi,
+        businessTax: cy.biz.tax, atSmallRate: cy.biz.atSmallRate, atGeneralRate: cy.biz.atGeneralRate, businessLimit: cy.biz.limits.fed,
+        invested: cr.invested, sale: cr.sale, realizedGain: cr.realizedGain, distributions: cr.distributions,
+        aaii: cr.aaii, investmentTax: cr.aaiiTax, partIV: cr.partIV, refund: cr.refund, tax: cr.tax,
+        dividendsPaid: cr.paid, workingDividends: cy.divW, drawn: cr.drawn,
+        balance: ca.bal, acb: ca.acb, cda: P.cda, grip: P.grip, erdtoh: P.erdtoh, nerdtoh: P.nerdtoh,
+        windUp: wu
+      };
     }
 
     return { years: years, summary: engine.summarize(years, plan), plan: plan };
@@ -594,8 +710,9 @@
         s.atRetirementReal = i === 0 ? s.atRetirement / y.cpi : prevReal;
       }
       if (y.total > s.peak) { s.peak = y.total; s.peakAge = y.age; }
-      s.lifetimeTax += y.tax;
-      s.lifetimeTaxReal += y.tax / y.cpi;
+      var yt = y.tax + (y.corpTax || 0);   // personal tax plus any corporate tax
+      s.lifetimeTax += yt;
+      s.lifetimeTaxReal += yt / y.cpi;
       if (y.shortfall > 1) {
         s.shortfallYears++;
         s.success = false;

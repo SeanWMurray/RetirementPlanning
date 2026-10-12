@@ -91,6 +91,45 @@
   });
 
   // ---------------------------------------------------------------------------
+  function corpAccount(p) { return p.accounts.filter(function (a) { return a.type === 'corp'; })[0] || null; }
+
+  sections.register({
+    id: 'corporation', title: 'Corporation',
+    summary: function (p) {
+      var ca = corpAccount(p), co = p.corporation || {};
+      if (!ca) return 'None';
+      return (num(co.activeIncome) ? fmt.money(co.activeIncome) + '/yr business income · ' : '') + fmt.money(ca.balance) + ' invested';
+    },
+    render: function (p) {
+      var ca = corpAccount(p), co = p.corporation || {};
+      if (!ca) {
+        return h('div', note('For incorporated professionals and business owners: business income taxed in a CCPC, the rest invested inside it, and money paid out to you as dividends. Tracks CDA, GRIP, ERDTOH and NERDTOH.'),
+          h('div.btn-row', ui.button('Add a corporation', function () {
+            var arr = U.clone(store().get('accounts'));
+            arr.push({ id: 'corp', name: 'Corporation', type: 'corp', balance: 0, costBase: 0, distYield: 0.02, distType: 'mix',
+              cda: 0, grip: 0, erdtoh: 0, nerdtoh: 0, contribLimit: 'none', contributionCap: null, returnRate: null });
+            store().set('accounts', arr, { structural: true });
+          }, { icon: 'plus', cls: 'ghost small' })));
+      }
+      return h('div',
+        ui.fields([
+          { path: 'corporation.activeIncome', label: 'Business income (before your salary)', type: 'money', min: 0,
+            help: 'Net active business income each year before paying you a salary, in today’s dollars. Taxed at the small-business rate up to the business limit, the general rate above it.' },
+          { path: 'corporation.growth', label: 'Annual growth (nominal)', type: 'percent' },
+          { path: 'corporation.endAge', label: 'Business income until age', type: 'age', nullable: true, placeholder: 'retirement',
+            help: 'Your age. Blank = until the owner retires.' },
+          { path: 'corporation.salaryFromCorp', label: 'Salary is paid by the corporation', type: 'toggle', wide: true,
+            help: 'The owner’s salary (Employment income) is deducted from business income, with the employer’s CPP. No EI on an owner-manager’s salary. Turn off if the salary comes from another employer.' },
+          { path: 'corporation.dividendsWorking', label: "Dividends to you while it runs (today's $/yr)", type: 'money', min: 0,
+            help: 'Paid each year while the business earns income: capital dividends from the CDA first, then eligible up to GRIP, then non-eligible. Anything else stays invested in the corporation.' },
+          { path: 'corporation.windUpYears', label: 'Extraction spread (years)', type: 'number', integer: true, min: 1, max: 30,
+            help: 'For the “after-tax if extracted” figures: the corporation is wound up and its value paid out evenly over this many years.' }
+        ]),
+        note('The corporation is in the Withdrawal order (Retirement drawdown): move it up to draw on it sooner. Each draw is paid to you as dividends in the same order. Set its investments and tax pools under Accounts & balances; see the Corporation tab for corporate tax, the pools and the after-tax value.'));
+    }
+  });
+
+  // ---------------------------------------------------------------------------
   sections.register({
     id: 'spending', title: 'Spending',
     summary: function (p) {
@@ -189,6 +228,7 @@
         var base = 'accounts.' + i + '.';
         var registered = a.type === 'rrsp' || a.type === 'tfsa';
         var mode = RP.engine.limitMode(a);
+        if (a.type === 'corp') { wrap.appendChild(corpCard(p, a, i)); return; }
         var defs = [
           { path: base + 'name', label: 'Name', type: 'text' },
           { path: base + 'type', label: 'Type', type: 'select', options: RP.schema.ACCOUNT_TYPES },
@@ -228,15 +268,46 @@
     }
   });
 
+  /** Account card for the corporation's investments and tax pools. */
+  function corpCard(p, a, i) {
+    var base = 'accounts.' + i + '.';
+    var defs = [
+      { path: base + 'name', label: 'Name', type: 'text' },
+      { path: base + 'type', label: 'Type', type: 'select', options: RP.schema.ACCOUNT_TYPES },
+      hasSpouse(p) ? { path: base + 'owner', label: 'Shareholder', type: 'select', options: [{ value: 'self', label: 'You' }, { value: 'spouse', label: spouseName(p) }],
+        help: 'Who owns the shares and receives the dividends.' } : null,
+      { path: base + 'balance', label: 'Investments held', type: 'money', min: 0, help: 'Market value of the corporation’s investment portfolio (not the operating business).' },
+      { path: base + 'costBase', label: 'Adjusted cost base', type: 'money', min: 0, help: 'Gains on sale are half taxable (as AAII) and half added to the CDA.' },
+      { path: base + 'cda', label: 'Capital dividend account (CDA)', type: 'money', min: 0, nullable: true, placeholder: '0', help: 'Paid out tax-free as capital dividends (on the T2 Schedule 89 balance).' },
+      { path: base + 'grip', label: 'GRIP', type: 'money', min: 0, nullable: true, placeholder: '0', help: 'General rate income pool: how much can be paid as eligible dividends (T2 Schedule 53).' },
+      { path: base + 'erdtoh', label: 'ERDTOH', type: 'money', min: 0, nullable: true, placeholder: '0', help: 'Eligible refundable dividend tax on hand (from Part IV tax on eligible portfolio dividends).' },
+      { path: base + 'nerdtoh', label: 'NERDTOH', type: 'money', min: 0, nullable: true, placeholder: '0', help: 'Non-eligible refundable dividend tax on hand (30⅔% of investment income).' },
+      { path: base + 'distYield', label: 'Taxable distributions (% /yr)', type: 'percent', min: 0, max: 0.2, nullable: true, placeholder: 'none',
+        help: 'Investment income paid each year as a % of the portfolio: interest (fully AAII), Canadian dividends (Part IV tax, adds to GRIP) and capital-gain distributions (half AAII, half CDA). The rest of the return is deferred gain.' },
+      num(a.distYield) > 0 ? { path: base + 'distType', label: 'Distribution type', type: 'select', options: RP.schema.DIST_TYPES } : null,
+      { path: base + 'returnRate', label: 'Return override', type: 'percent', nullable: true, placeholder: 'plan default' }
+    ];
+    return h('div.account-card',
+      h('div.account-head', h('span.badge.badge-corp', 'CORP'), h('b', a.name),
+        ui.button(null, function () {
+          ui.confirm('Remove corporation', 'Remove "' + a.name + '"? Its investments and tax pools will be dropped from the plan.', function () {
+            var arr = U.clone(store().get('accounts')); arr.splice(i, 1);
+            store().set('accounts', arr, { structural: true });
+          }, 'Remove');
+        }, { icon: 'trash', cls: 'ghost icon-only', aria: 'Remove corporation' })),
+      ui.fields(defs));
+  }
+
   function limitOptions(a) {
     return RP.schema.CONTRIBUTION_LIMITS.filter(function (o) { return o.value !== 'legal' || a.type === 'rrsp' || a.type === 'tfsa' || RP.engine.limitMode(a) === 'legal'; });
   }
 
   /** Re-orderable list of account ids bound to a path. */
-  function orderList(path, label, help) {
+  function orderList(path, label, help, include) {
     var p = store().effective();
-    var ids = (U.getPath(p, path) || []).filter(function (id) { return p.accounts.some(function (a) { return a.id === id; }); });
-    p.accounts.forEach(function (a) { if (ids.indexOf(a.id) < 0) ids.push(a.id); });
+    var accts = p.accounts.filter(include || function () { return true; });
+    var ids = (U.getPath(p, path) || []).filter(function (id) { return accts.some(function (a) { return a.id === id; }); });
+    accts.forEach(function (a) { if (ids.indexOf(a.id) < 0) ids.push(a.id); });
     function move(i, d) {
       var arr = ids.slice(), j = i + d;
       if (j < 0 || j >= arr.length) return;
@@ -284,7 +355,8 @@
         note(mode.description),
         ui.fields(mode.fields.map(function (f) { return defs[f]; })),
         h('p.note.savings-preview', preview || ''),
-        orderList('savings.order', 'Contribution order', 'Savings fill accounts top to bottom, each up to its contribution limit (set per account under Accounts & balances). Savings no account can take are shown as “Unsaved surplus”.'),
+        orderList('savings.order', 'Contribution order', 'Savings fill accounts top to bottom, each up to its contribution limit (set per account under Accounts & balances). Savings no account can take are shown as “Unsaved surplus”.',
+          function (a) { return a.type !== 'corp'; }),
         ui.fields([{ path: 'savings.enforceRoom', label: 'Enforce RRSP / TFSA contribution room', type: 'toggle', wide: true }]),
         note('To change an account’s contributions for certain ages (e.g. max the TFSA from 40–50), add a “Contribution change” event (Insert menu).'));
     }

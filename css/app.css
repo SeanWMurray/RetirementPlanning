@@ -241,6 +241,7 @@ input.color { width: 22px; height: 22px; padding: 1px; border: 1px solid var(--b
 .badge-tfsa { background: var(--series-3); }
 .badge-nonreg { background: var(--series-4); }
 .badge-cash { background: #6e6e6e; }
+.badge-corp { background: var(--series-5); }
 
 .order-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); background: var(--panel); }
 .order-list li { display: flex; align-items: center; gap: 6px; height: 22px; padding: 0 2px 0 6px; }

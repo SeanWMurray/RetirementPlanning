@@ -202,12 +202,13 @@
       ds('CPP', 1, function (y) { return y.cpp; }),
       ds('OAS', 2, function (y) { return y.oas; }),
       ds('Other income', 4, function (y) { return y.otherIncome; }),
+      years.some(function (y) { return y.corpDividends > 0; }) ? ds('Corp dividends', 6, function (y) { return y.corpDividends; }) : null,
       ds('Withdrawals', 3, function (y) { return y.withdrawals; }),
       { type: 'line', label: 'Spending', order: 0, borderColor: c.ink, backgroundColor: c.ink, borderWidth: 2, pointRadius: 0, tension: 0.1,
         data: years.map(function (y) { return val(y, y.spending, 'flow', R); }) },
       { type: 'line', label: 'Spending + tax', order: 0, borderColor: ui.cssVar('--critical'), backgroundColor: ui.cssVar('--critical'), borderWidth: 2, borderDash: [5, 4], pointRadius: 0, tension: 0.1,
         data: years.map(function (y) { return val(y, y.spending + y.tax, 'flow', R); }) }
-    ];
+    ].filter(Boolean);
     return make(canvas, {
       type: 'bar',
       data: { labels: labels, datasets: datasets },
@@ -238,6 +239,57 @@
         ds('Provincial', 1, function (y) { return y.provincialTax; }),
         ds('CPP / EI', 2, function (y) { return y.payroll; }),
         ds('OAS clawback', 7, function (y) { return y.oasClawback; })
+      ] },
+      options: {
+        animation: false, responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: { x: ageAxis(c, true), y: moneyAxis(c, true) },
+        plugins: { legend: legend(c), tooltip: tooltip(c) },
+        onClick: clickAge(opts.onClickAge)
+      }
+    });
+  };
+
+  /** Corporation value: investments held vs what you'd keep after all taxes if it were wound up. */
+  charts.corpValue = function (canvas, opts) {
+    var c = base();
+    var years = opts.result.years.filter(function (y) { return y.corp; }), R = opts.real;
+    function line(label, i, fn, dash) {
+      return { type: 'line', label: label, borderColor: series(i), backgroundColor: series(i), borderWidth: 2, borderDash: dash || [], pointRadius: 0, tension: 0.1,
+        data: years.map(function (y) { return val(y, fn(y), 'balance', R); }) };
+    }
+    return make(canvas, {
+      type: 'line',
+      data: { labels: years.map(function (y) { return y.age; }), datasets: [
+        line('Investments in the corporation', 4, function (y) { return y.corp.balance; }),
+        line('After tax if extracted', 2, function (y) { return y.corp.windUp.net; }, [5, 4])
+      ] },
+      options: {
+        animation: false, responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: { x: ageAxis(c), y: moneyAxis(c) },
+        plugins: { legend: legend(c), tooltip: tooltip(c) },
+        onClick: clickAge(opts.onClickAge)
+      }
+    });
+  };
+
+  /** Corporation flows: dividends paid to you by type (bars) and corporate tax (line). */
+  charts.corpFlows = function (canvas, opts) {
+    var c = base();
+    var years = opts.result.years.filter(function (y) { return y.corp; }), R = opts.real;
+    function ds(label, i, fn) {
+      return { type: 'bar', label: label, stack: 'd', order: 2, backgroundColor: series(i), borderColor: c.surface, borderWidth: { top: 1 },
+        data: years.map(function (y) { return val(y, fn(y), 'flow', R); }) };
+    }
+    return make(canvas, {
+      type: 'bar',
+      data: { labels: years.map(function (y) { return y.age; }), datasets: [
+        ds('Capital dividends (tax-free)', 2, function (y) { return y.corp.dividendsPaid.capital; }),
+        ds('Eligible dividends', 0, function (y) { return y.corp.dividendsPaid.eligible; }),
+        ds('Non-eligible dividends', 1, function (y) { return y.corp.dividendsPaid.nonEligible; }),
+        { type: 'line', label: 'Corporate tax (net of refunds)', order: 0, borderColor: ui.cssVar('--critical'), backgroundColor: ui.cssVar('--critical'),
+          borderWidth: 2, pointRadius: 0, tension: 0.1, data: years.map(function (y) { return val(y, y.corp.tax, 'flow', R); }) }
       ] },
       options: {
         animation: false, responsive: true, maintainAspectRatio: false,

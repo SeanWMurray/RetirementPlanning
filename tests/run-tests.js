@@ -9,7 +9,7 @@ var vm = require('vm');
 
 var root = path.join(__dirname, '..');
 [
-  'js/core.js', 'js/data/tax-2026.js', 'js/engine/tax.js', 'js/engine/events.js',
+  'js/core.js', 'js/data/tax-2026.js', 'js/engine/tax.js', 'js/engine/corporation.js', 'js/engine/events.js',
   'js/engine/strategies.js', 'js/engine/projection.js', 'js/engine/scenarios.js',
   'js/engine/analysis.js', 'js/state/schema.js', 'js/data/examples.js'
 ].forEach(function (f) { vm.runInThisContext(fs.readFileSync(path.join(root, f), 'utf8'), { filename: f }); });
@@ -542,6 +542,128 @@ test('fuzz: 120 random couples keep cash balanced, balances ≥ 0, and two retur
       ok(y.taxPeople[0].inputs.rrif >= -0.01 && y.taxPeople[1].inputs.rrif >= -0.01, 'no negative RRIF income after a split');
     });
   }
+});
+
+console.log('Corporation');
+var R_ON = RP.corp.rates(d, 'ON'), R_BC = RP.corp.rates(d, 'BC');
+test('non-eligible dividends: 15% gross-up and federal + provincial credits', function () {
+  var r = RP.tax.compute({ dividendsNE: 50000 }, ctx('ON', 40, { includePayroll: false }));
+  near(r.grossIncome, 57500, 0.01);
+  var fedGross = RP.tax.bracketTax(57500, d.federal.brackets, 1);
+  near(r.federal, Math.max(0, fedGross - d.federal.bpa.max * d.federal.creditRate - 57500 * 0.090301), 25, 'federal');
+  var elig = RP.tax.compute({ dividends: 50000 }, ctx('ON', 40, { includePayroll: false }));
+  ok(r.total > elig.total, 'non-eligible dividends are taxed more than eligible');
+});
+test('small-business rate up to the limit, general rate above; GRIP from the general-rate part', function () {
+  var b = RP.corp.businessTax(400000, R_ON, 0);
+  near(b.tax, 400000 * (0.09 + 0.022), 0.01); near(b.gripAdd, 0, 0.01);
+  var b2 = RP.corp.businessTax(700000, R_ON, 0);
+  near(b2.tax, 500000 * 0.112 + 200000 * 0.265, 0.01); near(b2.gripAdd, 200000 * 0.72, 0.01);
+});
+test('passive income grind: federal limit falls $5 per $1 of AAII over $50k; Ontario keeps its provincial limit', function () {
+  var on = RP.corp.businessTax(400000, R_ON, 100000);
+  near(on.limits.fed, 250000, 0.01); near(on.limits.prov, 500000, 0.01);
+  near(on.fedTax, 250000 * 0.09 + 150000 * 0.15, 0.01); near(on.provTax, 400000 * 0.022, 0.01);
+  near(on.gripAdd, 150000 * 0.72, 0.01);
+  var bc = RP.corp.businessTax(400000, R_BC, 100000);
+  near(bc.provTax, 250000 * 0.02 + 150000 * 0.12, 0.01, 'BC follows the grind');
+  near(RP.corp.businessTax(400000, R_ON, 150000).limits.fed, 0, 0.01, 'fully ground at $150k');
+});
+test('investment income: high rate, 30⅔% refundable; Part IV on portfolio dividends', function () {
+  var t = RP.corp.investmentTax(10000, 6000, R_ON);
+  near(t.aaiiTax, 10000 * (0.38667 + 0.115), 0.01); near(t.nerdtohAdd, 3066.7, 0.1);
+  near(t.partIV, 6000 * 0.38333, 0.01); near(t.erdtohAdd, t.partIV, 0.001); near(t.gripAdd, 6000, 0.001);
+});
+test('dividend order and refunds: CDA, then GRIP, then non-eligible; eligible only from ERDTOH', function () {
+  var sp = RP.corp.splitDividend(100000, { cda: 10000, grip: 20000 });
+  ok(sp.capital === 10000 && sp.eligible === 20000 && sp.nonEligible === 70000);
+  var r = RP.corp.dividendRefund(sp, { erdtoh: 5000, nerdtoh: 10000 }, R_ON);
+  near(r.fromErdtoh, 5000, 0.01); near(r.fromNerdtoh, 10000, 0.01);
+  var neFromE = RP.corp.dividendRefund({ eligible: 0, nonEligible: 30000 }, { erdtoh: 50000, nerdtoh: 0 }, R_ON);
+  near(neFromE.total, 30000 * 0.38333, 0.01, 'non-eligible dividends can recover ERDTOH');
+  var eNoN = RP.corp.dividendRefund({ eligible: 30000, nonEligible: 0 }, { erdtoh: 0, nerdtoh: 50000 }, R_ON);
+  near(eNoN.total, 0, 0.001, 'eligible dividends never recover NERDTOH');
+});
+test('wind-up: gains taxed in the corporation, refunds paid out, then personal tax', function () {
+  var plain = RP.corp.windUp({ balance: 100000, acb: 100000 }, { rates: R_ON, years: 1, personalTax: function (x) { return RP.tax.compute(x, ctx('ON', 65, { includePayroll: false })).total; } });
+  near(plain.corpTax, 0, 0.01); near(plain.nonEligible, 100000, 0.01);
+  near(plain.net, 100000 - RP.tax.compute({ dividendsNE: 100000 }, ctx('ON', 65, { includePayroll: false })).total, 0.01);
+  var g = RP.corp.windUp({ balance: 200000, acb: 100000 }, { rates: R_ON, years: 1 });
+  near(g.capital, 50000, 0.01, 'half the gain to CDA');
+  near(g.corpTax, 50000 * R_ON.investment, 0.01);
+  near(g.refund, Math.min(g.nonEligible * 0.38333, 50000 * 0.30667), 0.01, 'NERDTOH recovered');
+  near(g.dividends, 200000 - g.corpTax + g.refund, 0.01, 'everything is paid out');
+  var spread = RP.corp.windUp({ balance: 2000000, acb: 2000000 }, { rates: R_ON, years: 5, personalTax: function (x) { return RP.tax.compute(x, ctx('ON', 65, { includePayroll: false })).total; } });
+  var once = RP.corp.windUp({ balance: 2000000, acb: 2000000 }, { rates: R_ON, years: 1, personalTax: function (x) { return RP.tax.compute(x, ctx('ON', 65, { includePayroll: false })).total; } });
+  ok(spread.net > once.net + 50000, 'spreading the payout lowers personal tax');
+});
+function corpPlan(extra) {
+  var p = RP.util.clone(plan);
+  Object.assign(p.profile, { currentAge: 45, retirementAge: 60, province: 'ON' });
+  p.income.salary = 0;
+  p.corporation = Object.assign(RP.util.clone(p.corporation), { activeIncome: 250000, growth: 0.03, dividendsWorking: 90000 }, extra || {});
+  p.accounts = p.accounts.concat([{ id: 'corp', name: 'Holdco', type: 'corp', balance: 500000, costBase: 400000, distYield: 0.02, distType: 'mix', cda: 0, grip: 0, erdtoh: 0, nerdtoh: 0 }]);
+  p.retirement.withdrawalOrder = ['cash', 'corp', 'nonreg', 'tfsa', 'rrsp'];
+  return p;
+}
+test('corporation year one matches a hand calculation (Ontario)', function () {
+  var y = RP.engine.project(corpPlan()).years[0], c = y.corp;
+  near(c.businessTax, 250000 * 0.112, 0.01);
+  near(c.aaii, 10000 / 3 + (10000 / 3) * 0.5, 0.01, 'interest + half the gain distributions');
+  near(c.investmentTax, c.aaii * (0.38667 + 0.115), 0.01);
+  near(c.partIV, (10000 / 3) * 0.38333, 0.01);
+  near(c.dividendsPaid.eligible, 10000 / 3, 0.01, 'eligible up to GRIP from portfolio dividends received');
+  near(c.dividendsPaid.nonEligible, 90000 - 10000 / 3, 0.01);
+  near(c.tax, c.businessTax + c.investmentTax + c.partIV - c.refund, 0.01);
+  near(c.cda, (10000 / 3) * 0.5, 0.01);
+  near(y.corpDividends, 90000, 0.01);
+  near(y.taxInputs.dividendsNE, 90000 - 10000 / 3, 0.01);
+});
+test('salary paid by the corporation: deducted with employer CPP, no EI', function () {
+  var p = corpPlan(); p.income.salary = 80000;
+  var y = RP.engine.project(p).years[0];
+  near(y.corp.employerCpp, y.taxDetail.payroll.cpp + y.taxDetail.payroll.cpp2, 0.01);
+  ok(y.taxDetail.payroll.ei === 0, 'no EI for an owner-manager');
+  near(y.corp.businessIncome, 250000 - 80000 - y.corp.employerCpp, 0.01);
+  p.corporation.salaryFromCorp = false;
+  var y2 = RP.engine.project(p).years[0];
+  ok(y2.taxDetail.payroll.ei > 0 && y2.corp.businessIncome === 250000, 'salary from another employer');
+});
+test('drawing on the corporation in retirement pays dividends taxed on your return', function () {
+  var r = RP.engine.project(corpPlan());
+  var y = rowAt(r, 62);
+  ok(y.corp.drawn > 0, 'drawn');
+  var pd = y.corp.dividendsPaid;
+  near(pd.capital + pd.eligible + pd.nonEligible, y.corp.drawn, 0.01, 'no business dividends after retirement');
+  ok(y.withdrawByAccount.corp === y.corp.drawn);
+  near(y.taxInputs.dividendsNE, pd.nonEligible, 0.01);
+});
+test('corporate plans keep personal cash balanced and pools ≥ 0 (fuzz)', function () {
+  var rnd = RP.util.rng(11), provs = Object.keys(d.provinces);
+  for (var n = 0; n < 80; n++) {
+    var p = corpPlan({ activeIncome: Math.round(rnd() * 800000), dividendsWorking: Math.round(rnd() * 150000), salaryFromCorp: rnd() > 0.5 });
+    p.profile.province = provs[Math.floor(rnd() * provs.length)];
+    p.income.salary = Math.round(rnd() * 150000);
+    var ca = p.accounts[p.accounts.length - 1];
+    Object.assign(ca, { balance: Math.round(rnd() * 3000000), cda: Math.round(rnd() * 100000), grip: Math.round(rnd() * 200000), erdtoh: Math.round(rnd() * 50000), nerdtoh: Math.round(rnd() * 80000), distYield: rnd() * 0.04 });
+    ca.costBase = Math.round(ca.balance * rnd());
+    p.retirement.withdrawalOrder = rnd() > 0.5 ? ['corp', 'cash', 'nonreg', 'tfsa', 'rrsp'] : ['cash', 'nonreg', 'rrsp', 'tfsa', 'corp'];
+    var r = RP.engine.project(p);
+    r.years.forEach(function (y) {
+      near(y.incomeTotal + y.withdrawals + y.shortfall, y.tax + y.spending + y.contributions + y.unallocated, 2, 'plan ' + n + ' age ' + y.age);
+      var c = y.corp;
+      ['cda', 'grip', 'erdtoh', 'nerdtoh', 'balance', 'acb'].forEach(function (k) { ok(c[k] >= -0.01, k + ' ' + c[k] + ' plan ' + n + ' age ' + y.age); });
+      ok(c.windUp.net <= c.balance + c.erdtoh + c.nerdtoh + 1, 'cannot extract more than assets plus refundable tax');
+      ok(c.dividendsPaid.eligible <= c.grip + c.dividendsPaid.eligible + 1);
+    });
+  }
+});
+test('validator: corporation pools and settings', function () {
+  var n = RP.schema.normalize({ base: { accounts: [{ id: 'c', type: 'corp', balance: 1, cda: -5 }], corporation: { activeIncome: -1, windUpYears: 0 } } });
+  var paths = RP.schema.validate(n).map(function (x) { return x.path; }).join(' ');
+  ok(/accounts\.0\.cda/.test(paths) && /corporation\.activeIncome/.test(paths) && /corporation\.windUpYears/.test(paths), paths);
+  var n2 = RP.schema.normalize({ base: { corporation: { activeIncome: 100000 } } });
+  ok(RP.schema.validate(n2).some(function (x) { return x.level === 'warning' && /corporation/.test(x.path); }), 'warns without a corp account');
 });
 
 console.log('Review fixes (regressions)');
