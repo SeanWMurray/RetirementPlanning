@@ -1,6 +1,6 @@
 {
   "app": "canadian-retirement-planner",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "meta": {
     "name": "Late starter — Winnipeg",
     "notes": "A 52-year-old who started saving late and has a lot of unused RRSP and TFSA room. The base plan runs short in the late 70s; the scenarios show how much each lever helps: working to 67 and deferring CPP, cutting spending 15%, receiving an inheritance, or all three together.",
@@ -24,7 +24,8 @@
       "activeIncome": 0,
       "growth": 0.03,
       "endAge": null,
-      "salaryFromCorp": true,
+      "salary": 0,
+      "salaryGrowth": null,
       "dividendsWorking": 0,
       "dividendsIndexed": true,
       "windUpYears": 5

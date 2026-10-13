@@ -1,6 +1,6 @@
 {
   "app": "canadian-retirement-planner",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "meta": {
     "name": "Mid-career engineer — Calgary",
     "notes": "A 42-year-old engineer in Alberta with sizeable RRSP savings, two kids heading to university, and plans to travel early in retirement. Scenarios test retiring at 55 (with and without a market crash right at retirement), deferring CPP and OAS to 70, and switching to the 4% rule.",
@@ -24,7 +24,8 @@
       "activeIncome": 0,
       "growth": 0.03,
       "endAge": null,
-      "salaryFromCorp": true,
+      "salary": 0,
+      "salaryGrowth": null,
       "dividendsWorking": 0,
       "dividendsIndexed": true,
       "windUpYears": 5

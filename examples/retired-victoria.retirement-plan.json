@@ -1,6 +1,6 @@
 {
   "app": "canadian-retirement-planner",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "meta": {
     "name": "Recently retired — Victoria",
     "notes": "A 67-year-old who retired at 65, now drawing on a RRIF, TFSA and non-registered account alongside CPP and OAS. Watch the OAS clawback and RRIF minimums in the Tax tab. Scenarios compare the 4% rule, drawing the RRIF first (\"RRIF meltdown\") to smooth taxable income, and a market crash early in retirement.",
@@ -24,7 +24,8 @@
       "activeIncome": 0,
       "growth": 0.03,
       "endAge": null,
-      "salaryFromCorp": true,
+      "salary": 0,
+      "salaryGrowth": null,
       "dividendsWorking": 0,
       "dividendsIndexed": true,
       "windUpYears": 5

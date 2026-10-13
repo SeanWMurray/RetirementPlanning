@@ -1,6 +1,6 @@
 {
   "app": "canadian-retirement-planner",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "meta": {
     "name": "Incorporated physician — Toronto",
     "notes": "A 42-year-old physician whose professional corporation earns $420k a year before paying her. She takes $160k a year as dividends and leaves the rest invested inside the corporation, which already holds $650k (cost base $480k) with CDA, GRIP and refundable tax balances. In retirement she draws on the corporation first. The Corporation tab shows corporate tax, the CDA/GRIP/ERDTOH/NERDTOH pools each year, and what she would keep after all taxes if she extracted everything. Scenarios: a $120k salary (with RRSP room and CPP) instead of most of the dividends, retiring at 55, and extracting over 10 years instead of 5.",
@@ -24,7 +24,8 @@
       "activeIncome": 420000,
       "growth": 0.025,
       "endAge": null,
-      "salaryFromCorp": true,
+      "salary": 0,
+      "salaryGrowth": null,
       "dividendsWorking": 160000,
       "dividendsIndexed": true,
       "windUpYears": 5
@@ -230,7 +231,7 @@
       "visible": true,
       "notes": "A $120k salary from the corporation (creating RRSP room and CPP) plus $40k of dividends.",
       "overrides": {
-        "income.salary": 120000,
+        "corporation.salary": 120000,
         "corporation.dividendsWorking": 40000,
         "benefits.cppAt65": 14500
       },

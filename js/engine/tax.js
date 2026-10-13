@@ -4,7 +4,8 @@
  * RP.tax.compute(income, ctx) returns a full breakdown for one person-year.
  *
  *   income = {
- *     employment,      // T4 employment income
+ *     employment,      // employment income (T4, or self-employment with settings.selfEmployed)
+ *     employmentCorp,  // part of `employment` that is salary from your own corporation (no EI; always T4)
  *     other,           // other fully-taxable income (rental, part-time, interest, etc.)
  *     pension,         // pension income eligible for the pension credit at any age (e.g. DB pension)
  *     rrif,            // RRSP/RRIF withdrawals (pension-credit eligible at 65+)
@@ -71,40 +72,54 @@
     return Math.max(0, amt);
   };
 
-  /** CPP/QPP, EI and QPIP on employment income. */
-  tax.payroll = function (employment, ctx) {
+  /**
+   * CPP/QPP, EI and QPIP on employment income.
+   * `corpSalary` is the part of `employment` paid as salary by the person's own corporation: it is
+   * always T4 employment (employee half only; the corporation pays the employer half, see
+   * tax.employerCpp) and is not insurable for EI or QPIP (owner-managers with more than 40% of the
+   * shares). The rest is ordinary employment, or self-employment when settings.selfEmployed is on
+   * (both CPP halves, no EI). CPP is limited once across all sources, T4 earnings first, as on the return.
+   */
+  tax.payroll = function (employment, ctx, corpSalary) {
     var d = ctx.data.payroll, idx = ctx.index, s = ctx.settings || {};
     var prov = ctx.data.provinces[ctx.province] || {};
     var out = { cpp: 0, cpp2: 0, ei: 0, qpip: 0, baseCredit: 0, deduction: 0, total: 0 };
+    employment = num(employment);
     if (!s.includePayroll || employment <= 0) return out;
+    var corp = Math.min(employment, Math.max(0, num(corpSalary)));
+    var other = employment - corp;
 
     // CPP/QPP contributions stop at 70; EI and QPIP premiums apply at any age.
     var cppApplies = ctx.age < d.stopAge;
     var p = prov.usesQPP ? d.qpp : d.cpp;
     var ympe = p.ympe * idx, yampe = p.yampe * idx;
-    var pensionable = cppApplies ? Math.max(0, Math.min(employment, ympe) - p.exemption) : 0;
-    var base = pensionable * p.baseRate;
-    var enh = pensionable * p.firstEnhancedRate;
-    var tier2 = cppApplies ? Math.max(0, Math.min(employment, yampe) - ympe) * p.cpp2Rate : 0;
-
-    if (s.selfEmployed) {
-      // Pays both halves. Employee base portion -> credit; employer half + enhanced portions -> deduction.
-      out.cpp = 2 * (base + enh);
-      out.cpp2 = 2 * tier2;
-      out.baseCredit = base;
-      out.deduction = base + enh + enh + tier2 + tier2;
-    } else {
-      out.cpp = base + enh;
-      out.cpp2 = tier2;
-      out.baseCredit = base;
-      out.deduction = enh + tier2;
+    function pensionable(x) { return cppApplies ? Math.max(0, Math.min(x, ympe) - p.exemption) : 0; }
+    function second(x) { return cppApplies ? Math.max(0, Math.min(x, yampe) - ympe) : 0; }
+    var t4 = s.selfEmployed ? corp : employment;                     // earnings with an employer paying the other half
+    var penT4 = pensionable(t4), penSE = pensionable(employment) - penT4;
+    var t2T4 = second(t4), t2SE = second(employment) - t2T4;
+    var baseA = penT4 * p.baseRate, enhA = penT4 * p.firstEnhancedRate, cpp2A = t2T4 * p.cpp2Rate;
+    var baseB = penSE * p.baseRate, enhB = penSE * p.firstEnhancedRate, cpp2B = t2SE * p.cpp2Rate;
+    // Employee half: base portion -> credit; enhanced portions -> deduction.
+    // Self-employed: pays both halves; the employer half is deductible too.
+    out.cpp = baseA + enhA + 2 * (baseB + enhB);
+    out.cpp2 = cpp2A + 2 * cpp2B;
+    out.baseCredit = baseA + baseB;
+    out.deduction = enhA + cpp2A + baseB + 2 * enhB + 2 * cpp2B;
+    if (!s.selfEmployed && other > 0) {
       var eiRate = prov.usesQPP ? d.ei.rateQC : d.ei.rate;
-      // Owner-managers (more than 40% of the voting shares) can't be insured for EI on salary from their corporation.
-      out.ei = ctx.noEI ? 0 : Math.min(employment, d.ei.maxInsurable * idx) * eiRate;
-      if (prov.usesQPP) out.qpip = Math.min(employment, d.qpip.maxInsurable * idx) * d.qpip.rate;
+      out.ei = Math.min(other, d.ei.maxInsurable * idx) * eiRate;
+      if (prov.usesQPP) out.qpip = Math.min(other, d.qpip.maxInsurable * idx) * d.qpip.rate;
     }
     out.total = out.cpp + out.cpp2 + out.ei + out.qpip;
     return out;
+  };
+
+  /** The employer's matching CPP/QPP on a salary (what the corporation pays and deducts). */
+  tax.employerCpp = function (salary, ctx) {
+    var pr = tax.payroll(salary, { age: ctx.age, province: ctx.province, data: ctx.data, index: ctx.index,
+      settings: Object.assign({}, ctx.settings, { selfEmployed: false, includePayroll: true }) }, salary);
+    return pr.cpp + pr.cpp2;
   };
 
   // ---------------------------------------------------------------------------
@@ -156,7 +171,7 @@
     var neDef = d.federal.nonEligibleDividend || { grossUp: 0.15, credit: 0.090301 };
     var grossedNE = (s.mode || 'calculated') === 'calculated' ? divNE * (1 + neDef.grossUp) : divNE;
 
-    var payroll = tax.payroll(employment, ctx);
+    var payroll = tax.payroll(employment, ctx, inc.employmentCorp);
     var gross = employment + other + pension + rrif + cpp + oas + cg + grossedDiv + grossedNE;
     var netIncome = Math.max(0, gross - rrspDed - payroll.deduction);
 

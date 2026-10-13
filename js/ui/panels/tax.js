@@ -115,6 +115,7 @@
 
       var rows = [
         line('Employment income', inp.employment),
+        inp.employmentCorp ? line('   incl. salary from your corporation (no EI)', inp.employmentCorp, { sub: true }) : null,
         inp.cpp ? line('CPP / QPP', inp.cpp) : null,
         inp.oas ? line('OAS', inp.oas) : null,
         inp.pension ? line('Pension income (events)', inp.pension) : null,

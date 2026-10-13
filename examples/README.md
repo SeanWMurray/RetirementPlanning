@@ -104,7 +104,7 @@ A 42-year-old physician whose professional corporation earns $420k a year before
 | Scenario | Portfolio at retirement | Ending portfolio | Money lasts |
 |---|--:|--:|---|
 | Base plan | $8.50M | $12.93M | to 95 ✓ |
-| Salary instead of dividends | $8.19M | $12.37M | to 95 ✓ |
+| Salary instead of dividends | $8.25M | $12.44M | to 95 ✓ |
 | Retire at 55 | $5.20M | $6.40M | to 95 ✓ |
 | Extract over 10 years | $8.50M | $12.93M | to 95 ✓ |
 

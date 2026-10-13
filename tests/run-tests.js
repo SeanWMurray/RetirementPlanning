@@ -219,7 +219,7 @@ test('v1 plan files migrate to explicit contribution modes', function () {
   var old = { app: 'canadian-retirement-planner', schemaVersion: 1, base: { accounts: [
     { id: 'a', type: 'tfsa', contributionCap: 7000 }, { id: 'b', type: 'nonreg', contributionCap: null }, { id: 'c', type: 'cash', contributionCap: 0 }] } };
   var n = RP.schema.normalize(old);
-  ok(n.schemaVersion === 2);
+  ok(n.schemaVersion === RP.schema.SCHEMA_VERSION);
   ok(n.base.accounts.map(function (a) { return a.contribLimit; }).join() === 'custom,unlimited,none');
 });
 
@@ -619,15 +619,47 @@ test('corporation year one matches a hand calculation (Ontario)', function () {
   near(y.corpDividends, 90000, 0.01);
   near(y.taxInputs.dividendsNE, 90000 - 10000 / 3, 0.01);
 });
-test('salary paid by the corporation: deducted with employer CPP, no EI', function () {
-  var p = corpPlan(); p.income.salary = 80000;
+test('corporate salary: its own T4, deducted with employer CPP, no EI', function () {
+  var p = corpPlan({ salary: 80000 });
   var y = RP.engine.project(p).years[0];
-  near(y.corp.employerCpp, y.taxDetail.payroll.cpp + y.taxDetail.payroll.cpp2, 0.01);
+  near(y.employment, 80000, 0.01); near(y.taxInputs.employmentCorp, 80000, 0.01);
+  near(y.corp.employerCpp, y.taxDetail.payroll.cpp + y.taxDetail.payroll.cpp2, 0.01, 'employer matches the employee');
   ok(y.taxDetail.payroll.ei === 0, 'no EI for an owner-manager');
   near(y.corp.businessIncome, 250000 - 80000 - y.corp.employerCpp, 0.01);
-  p.corporation.salaryFromCorp = false;
-  var y2 = RP.engine.project(p).years[0];
-  ok(y2.taxDetail.payroll.ei > 0 && y2.corp.businessIncome === 250000, 'salary from another employer');
+  var y1 = rowAt(RP.engine.project(p), 46);
+  ok(y1.roomByAccount.rrsp + (y1.contribByAccount.rrsp || 0) > 0.18 * 80000 * 0.99, 'creates RRSP room');
+});
+test('corporate salary and another job: employee CPP capped once, EI only on the other job, employer CPP in full', function () {
+  var p = corpPlan({ salary: 60000 }); p.income.salary = 70000;
+  var y = RP.engine.project(p).years[0], c = ctx('ON', 45);
+  near(y.employment, 130000, 0.01);
+  var maxEmployee = RP.tax.payroll(500000, c);
+  near(y.taxDetail.payroll.cpp + y.taxDetail.payroll.cpp2, maxEmployee.cpp + maxEmployee.cpp2, 0.01, 'one yearly maximum across both');
+  near(y.taxDetail.payroll.ei, RP.tax.payroll(70000, c).ei, 0.01, 'EI on the other job only');
+  near(y.corp.employerCpp, RP.tax.employerCpp(60000, c), 0.01, 'the corporation pays its full employer share');
+});
+test('self-employed income plus a corporate salary: CPP on the T4 first, both halves only on the rest', function () {
+  var c = ctx('ON', 45, { selfEmployed: true });
+  var both = RP.tax.payroll(100000, c, 40000);
+  var t4 = RP.tax.payroll(40000, ctx('ON', 45), 40000);                // employee half on the corporate T4
+  var all = RP.tax.payroll(100000, ctx('ON', 45, { selfEmployed: true }));  // if all were self-employment
+  ok(both.cpp + both.cpp2 < all.cpp + all.cpp2, 'cheaper than self-employment on everything');
+  ok(both.cpp + both.cpp2 > t4.cpp + t4.cpp2, 'more than the T4 alone');
+  ok(both.ei === 0);
+  var noSe = RP.tax.payroll(100000, c, 0), legacy = all;
+  near(noSe.cpp, legacy.cpp, 0.001, 'unchanged without a corporate salary');
+});
+test('v2 plans: a salary paid by the corporation moves to corporation.salary', function () {
+  var v2 = { schemaVersion: 2, base: { income: { salary: 90000, growth: 0.04 },
+    corporation: { activeIncome: 300000, salaryFromCorp: true },
+    accounts: [{ id: 'corp', type: 'corp', balance: 0 }] },
+    scenarios: [{ id: 's', name: 'Raise', overrides: { 'income.salary': 120000 } }] };
+  var n = RP.schema.normalize(v2);
+  ok(n.base.corporation.salary === 90000 && n.base.corporation.salaryGrowth === 0.04 && n.base.income.salary === 0);
+  ok(n.scenarios[0].overrides['corporation.salary'] === 120000 && n.scenarios[0].overrides['income.salary'] === undefined);
+  ok(!('salaryFromCorp' in n.base.corporation));
+  var off = RP.schema.normalize({ schemaVersion: 2, base: { income: { salary: 90000 }, corporation: { salaryFromCorp: false }, accounts: [{ id: 'corp', type: 'corp', balance: 0 }] } });
+  ok(off.base.income.salary === 90000 && off.base.corporation.salary === 0, 'salary from another employer stays put');
 });
 test('drawing on the corporation in retirement pays dividends taxed on your return', function () {
   var r = RP.engine.project(corpPlan());

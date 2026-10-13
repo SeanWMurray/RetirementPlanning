@@ -1,6 +1,6 @@
 {
   "app": "canadian-retirement-planner",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "meta": {
     "name": "Dual-income couple — Ottawa",
     "notes": "A couple planning together: Sam (46, $118k) and Jordan (44, $64k, with a small public-sector DB pension from 60). Each has their own RRSP and TFSA; the non-registered account is in Sam’s name. Spending of $88k is for the household. Open the Tax tab to see two returns and the pension income split each year. Scenarios: turning pension splitting off (to see what it saves), Jordan retiring at 55, and both retiring at 57.",
@@ -24,7 +24,8 @@
       "activeIncome": 0,
       "growth": 0.03,
       "endAge": null,
-      "salaryFromCorp": true,
+      "salary": 0,
+      "salaryGrowth": null,
       "dividendsWorking": 0,
       "dividendsIndexed": true,
       "windUpYears": 5

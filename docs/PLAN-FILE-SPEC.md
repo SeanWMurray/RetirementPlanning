@@ -78,7 +78,7 @@ You are generating a JSON plan file for a deterministic Canadian retirement proj
 ```text
 {
   "app": "canadian-retirement-planner",   required, exactly this string
-  "schemaVersion": 2,                     required, this document describes version 2
+  "schemaVersion": 3,                     required, this document describes version 3
   "meta": { ... },                        plan name and notes
   "base": { ... },                        the main plan (all inputs)
   "scenarios": [ ... ],                   optional alternatives, stored as differences from base
@@ -149,7 +149,8 @@ For an owner of a Canadian-controlled private corporation. It only applies when 
 | `activeIncome` | number ≥ 0 | 0 | Net active business income per year **before** the owner's salary, in today's dollars. |
 | `growth` | rate | 0.03 | Annual growth of business income, nominal. |
 | `endAge` | integer or `null` | `null` | Last age (your age) with business income. `null` = until the owner retires. |
-| `salaryFromCorp` | boolean | `true` | The owner's salary (`income.salary`, or `spouse.salary` if the spouse owns the shares) is paid by the corporation: deducted from business income with the employer's CPP, and no EI. |
+| `salary` | number ≥ 0 | 0 | The owner's salary **from the corporation** per year, in today's dollars, paid while the business has income. It is separate from `income.salary` (or `spouse.salary`), which is employment with any other employer. The corporation deducts it plus its own employer CPP; the owner pays the employee CPP (combined with any other employment, up to the yearly maximum) and no EI. It creates RRSP room like any salary. |
+| `salaryGrowth` | rate or `null` | `null` | Yearly increase of the corporate salary, nominal. `null` = grows with inflation. |
 | `dividendsWorking` | number ≥ 0 | 0 | Dividends paid to the owner each year while the business earns income, in today's dollars. Paid as capital dividends (CDA) first, then eligible up to GRIP, then non-eligible. |
 | `dividendsIndexed` | boolean | `true` | Grow `dividendsWorking` with inflation. |
 | `windUpYears` | integer 1–30 | 5 | For the "after tax if extracted" figures: years over which the corporation is paid out. |
@@ -378,7 +379,7 @@ To *replace* a base event in a scenario (for example a smaller pension when reti
 
 The planner checks every file it opens. Errors are shown with the field path. Make sure that:
 
-- `app` is `"canadian-retirement-planner"` and `schemaVersion` is `2`.
+- `app` is `"canadian-retirement-planner"` and `schemaVersion` is `3`.
 - Ages are integers, `16 ≤ currentAge ≤ 110`, `endAge > currentAge`, `cppStartAge` is 60–70 and `oasStartAge` is 65–70.
 - `province` is a valid two-letter code and `tax.year` is `"2026"`.
 - Every rate is a decimal in a sensible range (inflation −0.05–0.2; `spending.growthWorking`/`growthRetired` −0.2–0.2; returns −0.5–0.3; `savings.rate`, `savings.rateMax`, `oasResidency` and `flatRate` 0–1; `savings.rateStep` −0.1–0.1; `savings.amountGrowth` −0.5–0.5; `withdrawalRate` 0–0.5). A value like `5` for 5% is an error.
@@ -395,7 +396,7 @@ The planner checks every file it opens. Errors are shown with the field path. Ma
 |---|---|
 | Defined-benefit pension | `income` event, `taxType: "pension"`, from pension start to `endAge`. Add a second event for a bridge benefit ending at 64. Set the RRSP to `contribLimit: "custom"` with a small amount, because pension adjustments reduce RRSP room. |
 | Buying a home | `expense` for the down payment and closing costs at the purchase age, plus a `spending` `adjustment` for the change in housing costs. |
-| Incorporated professional / business owner | Add a `corp` account with the corporation's investments, ACB and pools, and set `corporation.activeIncome` and `dividendsWorking` (or a salary with `salaryFromCorp: true`). Put `"corp"` in `retirement.withdrawalOrder` where they'd draw on it. |
+| Incorporated professional / business owner | Add a `corp` account with the corporation's investments, ACB and pools, and set `corporation.activeIncome`, `corporation.salary` and/or `corporation.dividendsWorking`. Leave `income.salary` at 0 unless they also have another employer. Put `"corp"` in `retirement.withdrawalOrder` where they'd draw on it. |
 | Couple | Set `spouse.enabled: true` with the spouse's age, retirement age, salary and CPP/OAS. Give each spouse their own RRSP and TFSA with `owner`; joint non-registered accounts can go to the higher earner or be split into two accounts. Keep `tax.pensionSplitting: true`. A spouse's DB pension is an `income` event with `owner: "spouse"`. |
 | Selling or downsizing a home | `lumpSum`, `taxType: "nontaxable"` (principal residence), net of costs. |
 | Children | `expense` with an age range (e.g. $15,000/yr for 18 years). RESP contributions can be an `expense` too. |
@@ -441,7 +442,7 @@ Everything not listed falls back to defaults.
 ```json
 {
   "app": "canadian-retirement-planner",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "meta": { "name": "Simple plan", "notes": "Defaults used for returns and inflation." },
   "base": {
     "profile": { "currentAge": 40, "retirementAge": 62, "endAge": 95, "province": "SK", "startYear": 2026 },
@@ -465,7 +466,7 @@ A couple: add `spouse` and give each account an `owner`.
 ```json
 {
   "app": "canadian-retirement-planner",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "meta": { "name": "Couple plan", "notes": "Each spouse has an RRSP and a TFSA; pension income is split." },
   "base": {
     "profile": { "currentAge": 55, "retirementAge": 62, "endAge": 95, "province": "ON", "startYear": 2026 },
@@ -500,7 +501,7 @@ A 44-year-old in British Columbia with a DB pension at their current job, a plan
 ```json
 {
   "app": "canadian-retirement-planner",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "meta": {
     "name": "Alex — Vancouver",
     "notes": "Assumptions: returns 6.0% before and 5.0% after retirement (balanced portfolio), inflation 2.1%, CPP estimate from the Service Canada statement. Spending excludes the mortgage, which is modelled as an expense until it is paid off at 56. DB pension figures from the 2025 pension statement."

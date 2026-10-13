@@ -220,7 +220,7 @@
     var CO = plan.corporation || {};
     var corpAcct = accts.filter(function (a) { return a.type === 'corp'; })[0] || null;
     var corpRates = corpAcct ? RP.corp.rates(d, prof.province) : null;
-    var corpSalary = !!corpAcct && CO.salaryFromCorp !== false;
+    var corpSalary0 = corpAcct ? Math.max(0, num(CO.salary)) : 0;   // salary the corporation pays its owner (today's $)
     var prevAAII = 0;
     if (corpAcct) {
       // Estimate last year's investment income from the starting portfolio, for the first year's business limit.
@@ -388,16 +388,15 @@
 
       // Interest on cash accounts is taxable annually (stays in the account).
       // Corporation, part 1: business income, its tax, and dividends paid to the owner while it runs.
-      var cy = null;
+      var cy = null, empCorp = [0, 0];
       if (corpAcct) {
         var co = corpAcct.owner;
         var active = CO.endAge === '' || CO.endAge == null ? ages[co] < (co ? spRetAge : retAge) : age <= num(CO.endAge);
-        var corpSal = corpSalary ? emp[co] : 0;
-        var erCpp = 0;
-        if (corpSal > 0) {
-          var pr = RP.tax.payroll(corpSal, { age: ages[co], province: prof.province, data: d, index: taxIdx, settings: plan.tax, noEI: true });
-          erCpp = plan.tax.selfEmployed ? 0 : pr.cpp + pr.cpp2;   // the employer's matching CPP, deductible to the corporation
-        }
+        // The owner's salary from the corporation: a T4 of its own, on top of any other employment income.
+        var corpSal = active && corpSalary0 > 0
+          ? corpSalary0 * (CO.salaryGrowth == null || CO.salaryGrowth === '' ? cpi : Math.pow(1 + num(CO.salaryGrowth), t)) : 0;
+        var erCpp = corpSal > 0 ? RP.tax.employerCpp(corpSal, { age: ages[co], province: prof.province, data: d, index: taxIdx, settings: plan.tax }) : 0;
+        emp[co] += corpSal; empCorp[co] = corpSal; y.employment += corpSal;
         var abiGross = active ? num(CO.activeIncome) * Math.pow(1 + num(CO.growth), t) : 0;
         var abi = abiGross - corpSal - erCpp;
         var biz = RP.corp.businessTax(abi, corpRates, prevAAII);
@@ -441,11 +440,11 @@
       var rrifMin = rrifBy[0] + rrifBy[1];
 
       var taxCtxs = [0, 1].map(function (p) {
-        return { age: ages[p], province: prof.province, data: d, index: taxIdx, settings: plan.tax, noEI: corpSalary && corpAcct.owner === p };
+        return { age: ages[p], province: prof.province, data: d, index: taxIdx, settings: plan.tax };
       });
       var inc0 = [0, 1].map(function (p) {
         return {
-          employment: emp[p], other: exOther[p] + interestBy[p] + distI[p], pension: exPension[p],
+          employment: emp[p], employmentCorp: empCorp[p], other: exOther[p] + interestBy[p] + distI[p], pension: exPension[p],
           cpp: ben[p].cpp, oas: ben[p].oas, rrif: rrifBy[p], capitalGains: distG[p] * cgInc, dividends: distD[p], dividendsNE: 0, rrspDeduction: 0
         };
       });
@@ -457,7 +456,7 @@
       function taxWith(extra) {
         var incs = inc0.map(function (b, p) {
           return {
-            employment: b.employment, other: b.other, pension: b.pension, cpp: b.cpp, oas: b.oas,
+            employment: b.employment, employmentCorp: b.employmentCorp, other: b.other, pension: b.pension, cpp: b.cpp, oas: b.oas,
             rrif: b.rrif + at(extra.rrif, p), capitalGains: b.capitalGains + at(extra.capitalGains, p),
             dividends: b.dividends + at(extra.dividends, p), dividendsNE: b.dividendsNE + at(extra.dividendsNE, p),
             rrspDeduction: at(extra.rrspDeduction, p)

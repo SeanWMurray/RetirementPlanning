@@ -267,7 +267,7 @@ var EXAMPLES = [
     build: function (b) {
       Object.assign(b.profile, { currentAge: 42, retirementAge: 62, endAge: 95, province: 'ON' });
       Object.assign(b.income, { salary: 0, growth: 0.03 });
-      b.corporation = { activeIncome: 420000, growth: 0.025, endAge: null, salaryFromCorp: true, dividendsWorking: 160000, dividendsIndexed: true, windUpYears: 5 };
+      b.corporation = { activeIncome: 420000, growth: 0.025, endAge: null, salary: 0, salaryGrowth: null, dividendsWorking: 160000, dividendsIndexed: true, windUpYears: 5 };
       Object.assign(b.spending, { mode: 'total', total: 125000, retirementChange: -0.1 });
       b.accounts = [
         account('corp', 'Professional corporation', 'corp', 650000, { costBase: 480000, distYield: 0.02, distType: 'mix', cda: 25000, grip: 0, erdtoh: 4000, nerdtoh: 12000, contribLimit: 'none' }),
@@ -281,7 +281,7 @@ var EXAMPLES = [
     },
     scenarios: [
       { name: 'Salary instead of dividends', notes: 'A $120k salary from the corporation (creating RRSP room and CPP) plus $40k of dividends.',
-        build: function (s) { s.overrides['income.salary'] = 120000; s.overrides['corporation.dividendsWorking'] = 40000; s.overrides['benefits.cppAt65'] = 14500; } },
+        build: function (s) { s.overrides['corporation.salary'] = 120000; s.overrides['corporation.dividendsWorking'] = 40000; s.overrides['benefits.cppAt65'] = 14500; } },
       { name: 'Retire at 55', build: function (s) { s.overrides['profile.retirementAge'] = 55; } },
       { name: 'Extract over 10 years', notes: 'Only changes the “after tax if extracted” figures on the Corporation tab.',
         build: function (s) { s.overrides['corporation.windUpYears'] = 10; } }

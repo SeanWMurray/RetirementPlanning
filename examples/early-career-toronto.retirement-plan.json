@@ -1,6 +1,6 @@
 {
   "app": "canadian-retirement-planner",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "meta": {
     "name": "Early career renter — Toronto",
     "notes": "A 28-year-old renting in Toronto, saving whatever is left after spending. Lower income, so the TFSA is filled before the RRSP. Scenarios compare buying a condo at 35 (down payment plus higher housing costs until the mortgage is paid), an aggressive savings plan to retire at 50, and a faster promotion track.",
@@ -24,7 +24,8 @@
       "activeIncome": 0,
       "growth": 0.03,
       "endAge": null,
-      "salaryFromCorp": true,
+      "salary": 0,
+      "salaryGrowth": null,
       "dividendsWorking": 0,
       "dividendsIndexed": true,
       "windUpYears": 5

@@ -22,7 +22,7 @@
 
   var schema = RP.schema = {};
   schema.APP_ID = 'canadian-retirement-planner';
-  schema.SCHEMA_VERSION = 2;
+  schema.SCHEMA_VERSION = 3;
 
   schema.SCENARIO_COLORS = ['#e0812f', '#239c8f', '#8b5ca8', '#c2416f', '#c49a1c', '#3f8f3a', '#5a86cf'];
 
@@ -32,7 +32,8 @@
       income: { salary: 100000, growth: 0.03 },
       // Optional corporation (CCPC). Used when the plan has an account of type 'corp' (its investments).
       corporation: {
-        activeIncome: 0, growth: 0.03, endAge: null, salaryFromCorp: true,
+        activeIncome: 0, growth: 0.03, endAge: null,
+        salary: 0, salaryGrowth: null,              // the owner's salary from the corporation (null growth = inflation)
         dividendsWorking: 0, dividendsIndexed: true, windUpYears: 5
       },
       // Optional spouse/partner. Ages are the spouse's own; the plan's timeline follows your age.
@@ -115,6 +116,29 @@
       }
       if (doc.base) upgrade(doc.base.accounts);
       (doc.scenarios || []).forEach(function (s) { if (s.overrides && s.overrides.accounts) upgrade(s.overrides.accounts); });
+      return doc;
+    },
+    // v3: the owner's corporate salary is its own field (corporation.salary). A v2 plan with a corporation
+    // and salaryFromCorp (the default) paid the owner's whole employment salary from the corporation.
+    3: function (doc) {
+      var b = doc.base;
+      if (!b) return doc;
+      var corp = (b.accounts || []).filter(function (a) { return a.type === 'corp'; })[0];
+      var co = b.corporation || (corp ? (b.corporation = {}) : null);   // v2 defaulted to salaryFromCorp: true
+      if (co && corp && co.salaryFromCorp !== false && co.salary == null) {
+        var spouseOwns = corp.owner === 'spouse' && b.spouse && b.spouse.enabled;
+        var src = spouseOwns ? b.spouse : b.income;
+        var key = spouseOwns ? 'spouse.' : 'income.';
+        co.salary = Number(src && src.salary) || 0;
+        co.salaryGrowth = src && src.growth != null ? src.growth : null;
+        if (src) src.salary = 0;
+        (doc.scenarios || []).forEach(function (sc) {
+          var o = sc.overrides || {};
+          if (o[key + 'salary'] != null) { o['corporation.salary'] = o[key + 'salary']; delete o[key + 'salary']; }
+        });
+      }
+      if (co) delete co.salaryFromCorp;
+      (doc.scenarios || []).forEach(function (sc) { if (sc.overrides) delete sc.overrides['corporation.salaryFromCorp']; });
       return doc;
     }
   };
@@ -223,7 +247,7 @@
     ['income.growth', -0.2, 0.3], ['assumptions.inflation', -0.05, 0.2], ['assumptions.returnPre', -0.5, 0.3],
     ['assumptions.returnPost', -0.5, 0.3], ['assumptions.cashReturn', -0.1, 0.2], ['assumptions.volatility', 0, 0.6],
     ['spending.retirementChange', -1, 2], ['spending.growthWorking', -0.2, 0.2], ['spending.growthRetired', -0.2, 0.2], ['savings.rate', 0, 1], ['savings.rateStep', -0.1, 0.1], ['savings.rateMax', 0, 1], ['savings.amountGrowth', -0.5, 0.5], ['retirement.withdrawalRate', 0, 0.5],
-    ['tax.flatRate', 0, 0.9], ['benefits.oasResidency', 0, 1], ['spouse.growth', -0.2, 0.3], ['spouse.oasResidency', 0, 1], ['corporation.growth', -0.5, 0.5]
+    ['tax.flatRate', 0, 0.9], ['benefits.oasResidency', 0, 1], ['spouse.growth', -0.2, 0.3], ['spouse.oasResidency', 0, 1], ['corporation.growth', -0.5, 0.5], ['corporation.salaryGrowth', -0.2, 0.3]
   ];
 
   schema.validate = function (doc) {
@@ -312,9 +336,10 @@
       if (co) {
         if (co.activeIncome != null && (!isNum(co.activeIncome) || co.activeIncome < 0)) err(prefix + 'corporation.activeIncome', 'must be a number ≥ 0 (annual business income before your salary, today’s dollars)');
         if (co.dividendsWorking != null && (!isNum(co.dividendsWorking) || co.dividendsWorking < 0)) err(prefix + 'corporation.dividendsWorking', 'must be a number ≥ 0');
+        if (co.salary != null && (!isNum(co.salary) || co.salary < 0)) err(prefix + 'corporation.salary', 'must be a number ≥ 0 (the owner’s salary from the corporation, today’s dollars)');
         if (co.windUpYears != null && (!isNum(co.windUpYears) || co.windUpYears < 1 || co.windUpYears > 30)) err(prefix + 'corporation.windUpYears', 'must be a whole number from 1 to 30');
         if (co.endAge != null && co.endAge !== '' && !isNum(co.endAge)) err(prefix + 'corporation.endAge', 'must be an age or null');
-        if (!corps.length && (num0(co.activeIncome) > 0 || num0(co.dividendsWorking) > 0)) warn(prefix + 'corporation', 'has business income or dividends but there is no account of type "corp", so it is ignored');
+        if (!corps.length && (num0(co.activeIncome) > 0 || num0(co.dividendsWorking) > 0 || num0(co.salary) > 0)) warn(prefix + 'corporation', 'has business income or dividends but there is no account of type "corp", so it is ignored');
       }
       [['savings.order', p.savings && p.savings.order], ['retirement.withdrawalOrder', p.retirement && p.retirement.withdrawalOrder]].forEach(function (o) {
         (o[1] || []).forEach(function (id) { if (!ids[id]) warn(prefix + o[0], 'refers to unknown account id "' + id + '"'); });

@@ -1,6 +1,6 @@
 {
   "app": "canadian-retirement-planner",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "meta": {
     "name": "Teacher with a DB pension — Halifax",
     "notes": "A 50-year-old teacher with a defined-benefit pension (modelled as pension-income events) and a bridge benefit until 65. Because the pension adjustment uses up most RRSP room, RRSP contributions are set to a fixed $3,000/yr. Scenarios: retire at 55 on a reduced pension, part-time tutoring after retiring, and long-term care costs late in life.",
@@ -24,7 +24,8 @@
       "activeIncome": 0,
       "growth": 0.03,
       "endAge": null,
-      "salaryFromCorp": true,
+      "salary": 0,
+      "salaryGrowth": null,
       "dividendsWorking": 0,
       "dividendsIndexed": true,
       "windUpYears": 5

@@ -33,11 +33,13 @@
   sections.register({
     id: 'income', title: 'Employment income',
     summary: function (p) { return fmt.money(p.income.salary) + '/yr · +' + fmt.pct(p.income.growth) + '/yr'; },
-    render: function () {
+    render: function (p) {
       return h('div', ui.fields([
         { path: 'income.salary', label: 'Gross salary (before tax)', type: 'money', min: 0 },
         { path: 'income.growth', label: 'Annual raise (nominal)', type: 'percent', help: 'Includes inflation. 3% with 2% inflation ≈ 1% real raise.' }
-      ]), note('Salary stops at retirement. Use events for part-time work, bonuses, sabbaticals, or a pension.'));
+      ]), note((p.accounts || []).some(function (a) { return a.type === 'corp'; })
+        ? 'Salary from other employers. Your salary from your own corporation is set under Corporation. Stops at retirement.'
+        : 'Salary stops at retirement. Use events for part-time work, bonuses, sabbaticals, or a pension.'));
     }
   });
 
@@ -98,7 +100,7 @@
     summary: function (p) {
       var ca = corpAccount(p), co = p.corporation || {};
       if (!ca) return 'None';
-      return (num(co.activeIncome) ? fmt.money(co.activeIncome) + '/yr business income · ' : '') + fmt.money(ca.balance) + ' invested';
+      return (num(co.activeIncome) ? fmt.money(co.activeIncome) + '/yr business income · ' : '') + (num(co.salary) ? fmt.money(co.salary) + ' salary · ' : '') + fmt.money(ca.balance) + ' invested';
     },
     render: function (p) {
       var ca = corpAccount(p), co = p.corporation || {};
@@ -118,8 +120,9 @@
           { path: 'corporation.growth', label: 'Annual growth (nominal)', type: 'percent' },
           { path: 'corporation.endAge', label: 'Business income until age', type: 'age', nullable: true, placeholder: 'retirement',
             help: 'Your age. Blank = until the owner retires.' },
-          { path: 'corporation.salaryFromCorp', label: 'Salary is paid by the corporation', type: 'toggle', wide: true,
-            help: 'The owner’s salary (Employment income) is deducted from business income, with the employer’s CPP. No EI on an owner-manager’s salary. Turn off if the salary comes from another employer.' },
+          { path: 'corporation.salary', label: "Your salary from it (today's $/yr)", type: 'money', min: 0,
+            help: 'A T4 salary from your own corporation, separate from Employment income (other employers). The corporation deducts it plus its employer CPP; you pay the employee CPP (shared with any other job, up to the yearly maximum) and no EI. It creates RRSP room. Paid while the business has income.' },
+          { path: 'corporation.salaryGrowth', label: 'Salary increase (nominal)', type: 'percent', nullable: true, placeholder: 'inflation' },
           { path: 'corporation.dividendsWorking', label: "Dividends to you while it runs (today's $/yr)", type: 'money', min: 0,
             help: 'Paid each year while the business earns income: capital dividends from the CDA first, then eligible up to GRIP, then non-eligible. Anything else stays invested in the corporation.' },
           { path: 'corporation.windUpYears', label: 'Extraction spread (years)', type: 'number', integer: true, min: 1, max: 30,
