@@ -36,7 +36,7 @@ const OUT = path.join(ROOT, 'docs', 'screenshots') + path.sep;
       s.addScenario('Retire at 57', sc => { sc.overrides['profile.retirementAge'] = 57; });
       s.addScenario('Crash at retirement', sc => RP.scenarioTemplates.get('crashAtRetirement').init(sc, base));
       s.setActive('base');
-      s.ui.collapsed = { accounts: true, savings: true, assumptions: true, benefits: true, retirement: true, tax: true, events: false };
+      s.ui.collapsed = { spouse: true, corporation: true, accounts: true, savings: true, assumptions: true, benefits: true, retirement: true, tax: true, events: false };
       document.querySelectorAll('details.section').forEach(d => { const id = RP.inputSections.list()[[...d.parentNode.children].filter(x => x.tagName === 'DETAILS').indexOf(d)].id; d.open = !s.ui.collapsed[id]; });
     });
     await page.waitForTimeout(500);
@@ -60,6 +60,22 @@ const OUT = path.join(ROOT, 'docs', 'screenshots') + path.sep;
     const row = page.locator('table.grid tbody tr').nth(25);
     await row.scrollIntoViewIfNeeded(); await row.click(); await page.waitForTimeout(400);
     await page.screenshot({ path: OUT + scheme + '-table-menu.png' });
+    // Corporation: the incorporated physician example, with the Corporation inputs open
+    await page.keyboard.press('Escape'); await page.waitForTimeout(200);   // close the table's row menu
+    await page.evaluate(() => {
+      const s = RP.store;
+      s.importJson(JSON.stringify(RP.examples.find(e => e.slug === 'incorporated-physician-toronto').doc));
+      s.setActive('base');
+      s.ui.collapsed = { profile: true, income: true, spouse: true, corporation: false, spending: true, accounts: true, savings: true, assumptions: true, benefits: true, retirement: true, tax: true, events: true };
+      s.saveUi();
+      RP.app.showTab('corporation', { age: 62 });
+    });
+    await page.waitForTimeout(300);
+    await page.evaluate(() => { document.querySelectorAll('details.section').forEach((d, i) => { const id = RP.inputSections.list()[i].id; d.open = id === 'corporation'; }); });
+    await shot('corporation');
+    await page.evaluate(() => { const card = [...document.querySelectorAll('.tab-host section.card')].find(c => /extracted it all/.test(c.textContent)); card.scrollIntoView(); });
+    await page.mouse.move(5, 5); await page.waitForTimeout(400);
+    await page.screenshot({ path: OUT + scheme + '-corporation-extraction.png' });
     console.log(scheme, errors.length ? errors : 'ok');
     await page.close();
   }

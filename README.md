@@ -15,6 +15,8 @@ The app follows your system's light/dark setting; you can also switch themes und
 | **Sensitivity**: solvers, tornado chart, two-way grid | [![](docs/screenshots/light-sensitivity.png)](docs/screenshots/light-sensitivity.png) |
 | **Monte Carlo**: probability of success and percentile bands | [![](docs/screenshots/light-montecarlo.png)](docs/screenshots/light-montecarlo.png) |
 | **Tax**: full return-style breakdown for any year | [![](docs/screenshots/light-tax.png)](docs/screenshots/light-tax.png) |
+| **Corporation**: business and investment tax, dividends by type, and value before and after extraction | [![](docs/screenshots/light-corporation.png)](docs/screenshots/light-corporation.png) |
+| **Extraction**: what you keep after corporate and personal tax, with the CDA, GRIP and RDTOH pools | [![](docs/screenshots/light-corporation-extraction.png)](docs/screenshots/light-corporation-extraction.png) |
 | **Events**: timeline of life events across the plan | [![](docs/screenshots/light-events.png)](docs/screenshots/light-events.png) |
 
 ## Features
